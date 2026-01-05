@@ -2016,9 +2016,20 @@ const requests_obj_fe_inperson = [
         method: "GET",
         url: "/agent/:id/checkout-details",
         interception_condition: "routes/_main.$basePath.$",
-        pre_process: explicit_target(
-            "/agent/969feace-a616-4fab-afc2-b48076eda9ef/checkout-details?_data=routes/_main.$basePath.$"
-        ),
+        pre_process: explicit_target(() => {
+            // Dynamically determine the correct target based on the application type and sales medium
+            const salesMedium = get_sales_medium();
+            if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
+                return salesMedium === "in_person"
+                    ? "/agent/iul/72414f8f-4909-466d-b6ae-4ca92983afd5/checkout-details?_data=routes/_main.$basePath.$"
+                    : "/agent/iul/virtual/299c4f89-eda3-4f3e-8e14-121dc42e54dd/checkout-details?_data=routes/_main.$basePath.$";
+            } else {
+                // For FE (FINAL_EXPENSE_EXPRESS_SOLUTION)
+                return salesMedium === "in_person"
+                    ? "/agent/969feace-a616-4fab-afc2-b48076eda9ef/checkout-details?_data=routes/_main.$basePath.$"
+                    : "/agent/virtual/ea6579b3-1912-4358-990c-5541b91a110b/checkout-details?_data=routes/_main.$basePath.$";
+            }
+        }),
         post_process: fe_checkout_details_post_process_routes,
     },
     {

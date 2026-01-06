@@ -107,6 +107,8 @@ const get_started = async (response) => {
         application_answers = {};
         beneficiaries = [];
         additional_data = [];
+        customize_coverage_completed = false; 
+        globalThis.customize_coverage_completed = false;
         body.viewContext.multiCardGetStartedStore.fromClient.answers = {};
     } else if (get_started_state === "save-agent-info") {
         body.viewContext.multiCardGetStartedStore.fromClient.answers = {};
@@ -574,8 +576,15 @@ const handleCheckoutDetailsRequest = async ({ request }) => {
     if (formData.interactionId === "billing-information-confirm") {
         res.data = null;
     }
+    // if (formData.interactionId === "customize-complete") {
+    //     apl = formData.apl;
+    // }
     if (formData.interactionId === "customize-complete") {
         apl = formData.apl;
+        customize_coverage_completed = true; // ← Make sure this is here
+        globalThis.customize_coverage_completed = true; // ← And this for pricing snippet
+        console.log("✅ Customize coverage completed, flag set to true");
+        console.log("apl value:", apl);
     }
     if (formData.interactionId === "customize-coverage") {
         res.data = {
@@ -1300,8 +1309,21 @@ function getNextNthWednesday(n) {
 const fe_checkout_details_post_process_routes = async (response) => {
     console.log("in the fe_checkout_details_post_process_routes")
     const body = await response.json();
-    console.log("response: ", body);
-    safe_set(body, "viewContext.policy.beneficiaries", []);
+
+    console.log("=== DEBUGGING COMPLETION INDICATORS ===");
+    console.log("pricing rates:", body?.viewContext?.pricing?.rates[0]?.prices[0]);
+    console.log("policy.apl:", body?.viewContext?.policy?.apl);
+    console.log("customize_coverage_completed flag:", customize_coverage_completed);
+    console.log("======================================");
+
+    // Set beneficiaries
+    if (beneficiaries.length === 0) {
+        safe_set(body, "viewContext.policy.beneficiaries", []);
+    } else {
+        safe_set(body, "viewContext.policy.beneficiaries", beneficiaries);
+    }
+
+    // Set face amounts
     safe_set(
         body,
         "viewContext.policy.pricingDetails.faceAmountCents",
@@ -1317,16 +1339,85 @@ const fe_checkout_details_post_process_routes = async (response) => {
         "viewContext.associatedQuote.face_amount",
         application_answers?.intendedCoverage?.replace(/,/g, "")
     );
+
+    // Always set face amount in pricing
     if (body?.viewContext?.pricing?.rates[0]?.prices[0]?.face_amount?.cents) {
         body.viewContext.pricing.rates[0].prices[0].face_amount.cents =
             application_answers?.intendedCoverage?.replace(/,/g, "") * 100;
     }
+
     console.log("final_yearly_premium: ", final_yearly_premium);
-    if (body?.viewContext?.pricing?.rates[0]?.prices[0] && final_yearly_premium && final_monthly_premium && final_face_amount) {
-        body.viewContext.pricing.rates[0].prices[0].face_amount.cents = final_face_amount;
-        body.viewContext.pricing.rates[0].prices[0].premium_monthly.cents = final_monthly_premium;
-        body.viewContext.pricing.rates[0].prices[0].premium_yearly.cents = final_yearly_premium;
+    console.log("customize_coverage_completed: ", customize_coverage_completed);
+
+    // ✅ CRITICAL: Remove premium data if customize not completed
+    if (!customize_coverage_completed) {
+        console.log("🚫 REMOVING ALL completion indicators");
+
+        // 1. Remove premiums from pricing rates
+        if (body?.viewContext?.pricing?.rates[0]?.prices[0]) {
+            const priceObj = body.viewContext.pricing.rates[0].prices[0];
+            console.log("Before deletion - premium_monthly:", priceObj.premium_monthly);
+            console.log("Before deletion - premium_yearly:", priceObj.premium_yearly);
+
+            delete priceObj.premium_monthly;
+            delete priceObj.premium_yearly;
+            delete priceObj.total_monthly_premium;
+            delete priceObj.total_yearly_premium;
+            delete priceObj.modal_premium;
+
+            console.log("After deletion - premium_monthly:", priceObj.premium_monthly);
+            console.log("After deletion - premium_yearly:", priceObj.premium_yearly);
+        }
+
+        // 2. Remove APL setting
+        if (body?.viewContext?.policy) {
+            console.log("Before deletion - policy.apl:", body.viewContext.policy.apl);
+            delete body.viewContext.policy.apl;
+            console.log("After deletion - policy.apl:", body.viewContext.policy.apl);
+        }
+
+        // 3. Clear any other pricing indicators
+        if (body?.viewContext?.policy?.pricingDetails) {
+            delete body.viewContext.policy.pricingDetails.monthlyPremiumCents;
+            delete body.viewContext.policy.pricingDetails.yearlyPremiumCents;
+            delete body.viewContext.policy.pricingDetails.modalPremiumCents;
+            delete body.viewContext.policy.pricingDetails.annualPremiumCents;
+            delete body.viewContext.policy.pricingDetails.grossModalPremiumCents;
+        }
+
+        console.log("✅ All completion indicators removed");
+
+    } else if (final_yearly_premium && final_monthly_premium && final_face_amount) {
+        // User has completed customize step - restore their selections
+        console.log("✅ RESTORING customized premium data");
+
+        if (body?.viewContext?.pricing?.rates[0]?.prices[0]) {
+            const priceObj = body.viewContext.pricing.rates[0].prices[0];
+            priceObj.face_amount = { cents: final_face_amount };
+            priceObj.premium_monthly = { cents: final_monthly_premium };
+            priceObj.premium_yearly = { cents: final_yearly_premium };
+            priceObj.total_monthly_premium = { cents: final_monthly_premium };
+            priceObj.total_yearly_premium = { cents: final_yearly_premium };
+        }
+
+        // Restore policy-level pricing
+        if (body?.viewContext?.policy?.pricingDetails) {
+            body.viewContext.policy.pricingDetails.faceAmountCents = final_face_amount;
+            body.viewContext.policy.pricingDetails.annualPremiumCents = final_yearly_premium;
+            body.viewContext.policy.pricingDetails.grossModalPremiumCents = final_monthly_premium;
+        }
+
+        // Restore APL
+        if (body?.viewContext?.policy) {
+            body.viewContext.policy.apl = apl === "enabled";
+        }
     }
+
+    console.log("=== FINAL STATE ===");
+    console.log("pricing rates after:", body?.viewContext?.pricing?.rates[0]?.prices[0]);
+    console.log("policy.apl after:", body?.viewContext?.policy?.apl);
+    console.log("===================");
+
     return new Blob([JSON.stringify(body)], { type: "application/json" });
 };
 

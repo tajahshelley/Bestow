@@ -108,6 +108,7 @@ const get_started = async (response) => {
         application_answers = {};
         beneficiaries = [];
         additional_data = [];
+        customize_coverage_completed = false;
         body.viewContext.multiCardGetStartedStore.fromClient.answers = {};
     } else if (get_started_state === "save-agent-info") {
         body.viewContext.multiCardGetStartedStore.fromClient.answers = {};
@@ -593,9 +594,14 @@ const handleCheckoutDetailsRequest = async ({ request }) => {
         res.data = null;
     }
     if (formData.interactionId === "customize-complete") {
+        console.log("✅✅✅ CUSTOMIZE COMPLETE HANDLER TRIGGERED ✅✅✅");
         apl = formData.apl;
+        customize_coverage_completed = true;
+        console.log("Set customize_coverage_completed to:", customize_coverage_completed);
+        console.log("Set apl to:", apl);
     }
     if (formData.interactionId === "customize-coverage") {
+        console.log("📝 customize-coverage interaction (adjusting, not complete yet)");
         res.data = {
             customizeCoverage: {
                 __typename: "MutationSuccess",

@@ -108,7 +108,6 @@ const get_started = async (response) => {
         application_answers = {};
         beneficiaries = [];
         additional_data = [];
-        customize_coverage_completed = false;
         body.viewContext.multiCardGetStartedStore.fromClient.answers = {};
     } else if (get_started_state === "save-agent-info") {
         body.viewContext.multiCardGetStartedStore.fromClient.answers = {};
@@ -341,9 +340,9 @@ const handlePINRequest = async ({ request }) => {
 
      const formData = Object.fromEntries(
         new URLSearchParams(await request.text())
-    );
-     console.log("handlePINRequest formData", formData); 
-
+     );
+    
+    virtual_notification_preference = formData.notificationPreference;
     if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
         self.clients
             .matchAll({ type: "window", includeUncontrolled: true })
@@ -351,7 +350,7 @@ const handlePINRequest = async ({ request }) => {
                 if (clientList.length > 0) {
                     clientList[0].postMessage({
                         action: "open-url",
-                        url: "https://app.getreprise.com/launch/x6412kn/"
+                        url: virtual_notification_preference ===  "https://app.getreprise.com/launch/x6412kn/" 
                     });
                 }
             });
@@ -388,6 +387,8 @@ const handleCommissionRequest = async ({ request }) => {
         new URLSearchParams(await request.text())
     );
     save_answers(formData);
+    console.log("virtual_notification_preference", virtual_notification_preference)
+
     // if (formData.interactionId === "commission-complete") {
     //   return new Response(
     //     JSON.stringify({
@@ -434,6 +435,8 @@ const handleReviewDocumentsRequest = async ({ request }) => {
         new URLSearchParams(await request.text())
     );
     save_answers(formData);
+    console.log("virtual_notification_preference", virtual_notification_preference)
+
     if (formData.interactionId === "validate-agent-number") {
         const sales_medium = get_sales_medium();
         let redirect;
@@ -594,14 +597,9 @@ const handleCheckoutDetailsRequest = async ({ request }) => {
         res.data = null;
     }
     if (formData.interactionId === "customize-complete") {
-        console.log("✅✅✅ CUSTOMIZE COMPLETE HANDLER TRIGGERED ✅✅✅");
         apl = formData.apl;
-        customize_coverage_completed = true;
-        console.log("Set customize_coverage_completed to:", customize_coverage_completed);
-        console.log("Set apl to:", apl);
     }
     if (formData.interactionId === "customize-coverage") {
-        console.log("📝 customize-coverage interaction (adjusting, not complete yet)");
         res.data = {
             customizeCoverage: {
                 __typename: "MutationSuccess",
@@ -1145,7 +1143,15 @@ function getNextNthWednesday(n) {
 const fe_checkout_details_post_process_routes = async (response) => {
     console.log("in the fe_checkout_details_post_process_routes")
     const body = await response.json();
-    console.log("response: ", body);
+    
+    console.log("=== FULL POLICY OBJECT ===");
+    console.log("policy.apl:", body?.viewContext?.policy?.apl);
+    console.log("policy.customizeCoverageComplete:", body?.viewContext?.policy?.customizeCoverageComplete);
+    console.log("policy.bindDetails:", body?.viewContext?.policy?.bindDetails);
+    console.log("policy.pricingDetails:", body?.viewContext?.policy?.pricingDetails);
+    console.log("=== CHECK FOR COMPLETION FLAGS ===");
+    console.log("Full policy object:", JSON.stringify(body?.viewContext?.policy, null, 2));
+    console.log("================================");
 
     // Set beneficiaries
     if (beneficiaries.length === 0) {

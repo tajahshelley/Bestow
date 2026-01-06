@@ -6,6 +6,7 @@ let application_state = {};
 let underwriting_state = 0;
 let checkout_signatures_state = 0;
 let apl = "enabled";
+let virtual_notification_preference = "";
 var customize_coverage_completed = false;
 
 // code for pre-approval flow
@@ -336,17 +337,34 @@ const handleLifestyleRequest = async ({ request }) => {
 };
 
 const handlePINRequest = async ({ request }) => {
-    self.clients
-        .matchAll({ type: "window", includeUncontrolled: true })
-        .then((clientList) => {
-            if (clientList.length > 0) {
-                // Send a message to the first client
-                clientList[0].postMessage({ action: "open-url", url: "/pin_code" });
-            }
-        });
-    const formData = Object.fromEntries(
+
+     const formData = Object.fromEntries(
         new URLSearchParams(await request.text())
     );
+     console.log("handlePINRequest formData", formData); 
+
+    if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
+        self.clients
+            .matchAll({ type: "window", includeUncontrolled: true })
+            .then((clientList) => {
+                if (clientList.length > 0) {
+                    clientList[0].postMessage({
+                        action: "open-url",
+                        url: "https://app.getreprise.com/launch/x6412kn/"
+                    });
+                }
+            });
+    }
+    else {
+        self.clients
+            .matchAll({ type: "window", includeUncontrolled: true })
+            .then((clientList) => {
+                if (clientList.length > 0) {
+                    // Send a message to the first client
+                    clientList[0].postMessage({ action: "open-url", url: "/pin_code" });
+                }
+            });
+    } 
 
     save_answers(formData);
     if (formData.interactionId === "documents-waiting") {
@@ -610,7 +628,8 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
         formData.interactionId === "billing-info-complete" ||
         formData.interactionId === "payment-details-complete" ||
         formData.interactionId === "payment-iul-schedule-confirm" ||
-        formData.interactionId === "payment-schedule-complete"
+        formData.interactionId === "payment-schedule-complete" ||
+        formData.interactionId === "go-to-checkout-signatures-iul" 
     ) {
         console.log("interaction id matched in checkout payment");
         save_answers(formData);
@@ -696,9 +715,7 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
 
     if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
         redirect =
-            get_sales_medium() === "in_person"
-                ? "/agent/iul/72414f8f-4909-466d-b6ae-4ca92983afd5/checkout-signatures"
-                : "/agent/iul/virtual/299c4f89-eda3-4f3e-8e14-121dc42e54dd/checkout-signatures";
+                 "/agent/iul/virtual/299c4f89-eda3-4f3e-8e14-121dc42e54dd/checkout-signatures";
     } else {
         redirect =
             get_sales_medium() === "in_person"
@@ -715,193 +732,6 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
     });
 };
 
-/* 
-const handleCheckoutPaymentRequest = async ({ request }) => {
-    // Read body once and store it
-    const bodyText = await request.text();
-    const formData = Object.fromEntries(
-        new URLSearchParams(bodyText)
-    );
-    console.log("formData in checkout payment", formData);
-    console.log("formData in checkout interactionId", formData.interactionId);
-
-    // IUL Sequence Logic - Just save data, sequence is already updated in pre_process
-    if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
-        console.log("Current IUL sequence step in handler:", checkout_payment_sequence_step);
-
-        // Step 1: payment-iul-schedule-confirm
-        if (formData.interactionId === "payment-iul-schedule-confirm") {
-            console.log("[IUL Payment Handler] Step 1: payment-iul-schedule-confirm");
-            save_answers(formData);
-            payment_map = {
-                billing_mode: formData.billing_mode || null,
-                monthly_premium: formData.monthly_premium || null,
-                billing_schedule: formData.billing_schedule || null,
-                start_date: formData.start_date || null,
-            };
-            console.log("payment_map: ", payment_map);
-            // Continue to normal response handling
-        }
-
-        // Step 2: billing-info-complete
-        else if (formData.interactionId === "billing-info-complete") {
-            console.log("[IUL Payment Handler] Step 2: billing-info-complete");
-            save_answers(formData);
-            if (formData["secondary_contact.full_name.first"]) {
-                secondary_contact_map = {
-                    first: formData["secondary_contact.full_name.first"] || null,
-                    last: formData["secondary_contact.full_name.last"] || null,
-                    street_1: formData["secondary_contact.address.street_1"] || null,
-                    street_2: formData["secondary_contact.address.street_2"] || "",
-                    city: formData["secondary_contact.address.city"] || null,
-                    state: formData["secondary_contact.address.state"] || null,
-                    postal_code: formData["secondary_contact.address.postal_code"] || null,
-                    phone: formData["secondary_contact.phone"] || null,
-                    email: formData["secondary_contact.email"] || null
-                };
-            }
-            // Continue to normal response handling
-        }
-
-        // Step 3: payment-details-complete
-        else if (formData.interactionId === "payment-details-complete") {
-            console.log("[IUL Payment Handler] Step 3: payment-details-complete");
-            save_answers(formData);
-            if (formData.payment_method_type === "BANK_ACCOUNT") {
-                bank_account_info_map = {
-                    id: "Q3PHJDX88WJX66W5",
-                    method_type: formData.payment_method_type,
-                    bank_name: "UNLISTED TEST BANK",
-                    last4: formData["ach_payment_data.account_number"].slice(-4),
-                    account_type: formData["ach_payment_data.account_type"] === "AT_CHECKING" ? "checking" : "savings",
-                    account_number_token: "782b19b5-3f4e-4351-b670-ff7920d6236d",
-                    routing_number: formData["ach_payment_data.routing_number"]
-                };
-            } else if (formData.payment_method_type === "CARD") {
-                credit_card_info_map = null;
-            }
-            // Continue to normal response handling
-        }
-
-        // Step 4: payment-schedule-complete
-        else if (formData.interactionId === "payment-schedule-complete") {
-            console.log("[IUL Payment Handler] Step 4: payment-schedule-complete");
-            save_answers(formData);
-            payment_map = {
-                billing_mode: formData.billing_mode || null,
-                monthly_premium: formData.monthly_premium || null,
-                yearly_premium: formData.yearly_premium || null,
-                billing_schedule: formData.billing_schedule || null,
-                ssbb_payment_schedule: formData.ssbb_payment_schedule || null,
-                start_date: formData.start_date || null,
-                radioInput: formData.radioInput || null
-            };
-            console.log("payment_map: ", payment_map);
-            // Continue to normal response handling
-        }
-
-        // Step 5: Redirect to checkout-signatures
-        else if (formData.interactionId === "go-to-checkout-signatures-iul" && checkout_payment_sequence_step === 4) {
-            console.log("[IUL Payment Handler] Step 5: go-to-checkout-signatures-iul - Redirecting");
-            checkout_payment_sequence_step = 0; // Reset sequence
-            const redirect = get_sales_medium() === "in_person"
-                ? "/agent/iul/72414f8f-4909-466d-b6ae-4ca92983afd5/checkout-signatures"
-                : "/agent/iul/virtual/299c4f89-eda3-4f3e-8e14-121dc42e54dd/checkout-signatures";
-            return new Response(null, {
-                status: 204,
-                headers: {
-                    "Content-Type": "text/html",
-                    "X-Remix-Redirect": redirect,
-                },
-            });
-        }
-    }
-
-    if (
-        formData.interactionId === "payment-schedule-confirm" ||
-        formData.interactionId === "billing-info-complete" ||
-        formData.interactionId === "payment-details-complete" ||
-        formData.interactionId === "payment-schedule-complete"
-    ) {
-        console.log("interaction id matched in checkout payment");
-        save_answers(formData);
-        const res = {
-            type: "state-success",
-            interactionId: formData.interactionId,
-            timestamp: 1760021290094,
-            data: "",
-        };
-
-        if (formData.interactionId === "payment-schedule-complete") {
-            payment_map = null;
-            payment_map = {
-                billing_mode: formData.billing_mode || null,
-                monthly_premium: formData.monthly_premium || null,
-                yearly_premium: formData.yearly_premium || null,
-                billing_schedule: formData.billing_schedule || null,
-                ssbb_payment_schedule: formData.ssbb_payment_schedule || null,
-                start_date: formData.start_date || null,
-                radioInput: formData.radioInput || null
-            };
-            console.log("payment_map: ", payment_map);
-        }
-
-        if (formData.interactionId === "billing-info-complete") {
-            // checking if there is secondary contact information
-            if (formData["secondary_contact.full_name.first"]) {
-                secondary_contact_map = null;
-                secondary_contact_map = {
-                    first: formData["secondary_contact.full_name.first"] || null,
-                    last: formData["secondary_contact.full_name.last"] || null,
-                    street_1: formData["secondary_contact.address.street_1"] || null,
-                    street_2: formData["secondary_contact.address.street_2"] || "",
-                    city: formData["secondary_contact.address.city"] || null,
-                    state: formData["secondary_contact.address.state"] || null,
-                    postal_code: formData["secondary_contact.address.postal_code"] || null,
-                    phone: formData["secondary_contact.phone"] || null,
-                    email: formData["secondary_contact.email"] || null
-                };
-            }
-        }
-
-        if (formData.interactionId === "payment-details-complete") {
-            if (formData.payment_method_type === "BANK_ACCOUNT") {
-                bank_account_info_map = null;
-                bank_account_info_map = {
-                    id: "Q3PHJDX88WJX66W5",
-                    method_type: formData.payment_method_type,
-                    bank_name: "UNLISTED TEST BANK",
-                    last4: formData["ach_payment_data.account_number"].slice(-4),
-                    account_type: formData["ach_payment_data.account_type"] === "AT_CHECKING" ? "checking" : "savings",
-                    account_number_token: "782b19b5-3f4e-4351-b670-ff7920d6236d",
-                    routing_number: formData["ach_payment_data.routing_number"]
-                };
-            } else if (formData.payment_method_type === "CARD") {
-                credit_card_info_map = null;
-            }
-        }
-
-        return new Response(JSON.stringify(res), {
-            status: 200,
-            headers: {
-                "Content-Type": "application/json; charset=utf-8",
-            },
-        });
-    }
-
-    // Default redirect for non-IUL flows
-    const redirect = get_sales_medium() === "in_person"
-        ? "/agent/969feace-a616-4fab-afc2-b48076eda9ef/checkout-signatures"
-        : "/agent/virtual/ea6579b3-1912-4358-990c-5541b91a110b/checkout-signatures";
-
-    return new Response(null, {
-        status: 204,
-        headers: {
-            "Content-Type": "text/html",
-            "X-Remix-Redirect": redirect,
-        },
-    });
-}; */
 
 const handleCheckoutSignatureRequest = async ({ request }) => {
     const formData = Object.fromEntries(
@@ -912,8 +742,17 @@ const handleCheckoutSignatureRequest = async ({ request }) => {
         formData.interactionId === "send-owner-pin"
     ) {
         save_answers(formData);
-        // open pin code email
-        if (formData.interactionId === "send-owner-pin") {
+        if (formData.interactionId === "send-owner-pin" && application_type === "FINANCIAL_FOUNDATION_IUL_II") {
+            self.clients
+                .matchAll({ type: "window", includeUncontrolled: true })
+                .then((clientList) => {
+                    if (clientList.length > 0) {
+                        // Send a message to the first client
+                        clientList[0].postMessage({ action: "open-url", url: "https://app.getreprise.com/launch/x6412kn/" });
+                    }
+                });
+        }
+       else if (formData.interactionId === "send-owner-pin") {
             self.clients
                 .matchAll({ type: "window", includeUncontrolled: true })
                 .then((clientList) => {
@@ -1301,7 +1140,15 @@ const fe_checkout_details_post_process_routes = async (response) => {
     console.log("in the fe_checkout_details_post_process_routes")
     const body = await response.json();
     console.log("response: ", body);
-    safe_set(body, "viewContext.policy.beneficiaries", []);
+
+    // Set beneficiaries
+    if (beneficiaries.length === 0) {
+        safe_set(body, "viewContext.policy.beneficiaries", []);
+    } else {
+        safe_set(body, "viewContext.policy.beneficiaries", beneficiaries);
+    }
+
+    // Set face amounts
     safe_set(
         body,
         "viewContext.policy.pricingDetails.faceAmountCents",
@@ -1317,16 +1164,38 @@ const fe_checkout_details_post_process_routes = async (response) => {
         "viewContext.associatedQuote.face_amount",
         application_answers?.intendedCoverage?.replace(/,/g, "")
     );
+
+    // Always set face amount in pricing
     if (body?.viewContext?.pricing?.rates[0]?.prices[0]?.face_amount?.cents) {
         body.viewContext.pricing.rates[0].prices[0].face_amount.cents =
             application_answers?.intendedCoverage?.replace(/,/g, "") * 100;
     }
+
     console.log("final_yearly_premium: ", final_yearly_premium);
-    if (body?.viewContext?.pricing?.rates[0]?.prices[0] && final_yearly_premium && final_monthly_premium && final_face_amount) {
-        body.viewContext.pricing.rates[0].prices[0].face_amount.cents = final_face_amount;
-        body.viewContext.pricing.rates[0].prices[0].premium_monthly.cents = final_monthly_premium;
-        body.viewContext.pricing.rates[0].prices[0].premium_yearly.cents = final_yearly_premium;
+    console.log("customize_coverage_completed: ", customize_coverage_completed);
+
+    // ✅ Handle premium data based on completion state
+    if (body?.viewContext?.pricing?.rates[0]?.prices[0]) {
+        const priceObj = body.viewContext.pricing.rates[0].prices[0];
+
+        if (!customize_coverage_completed) {
+            // User hasn't completed customize step yet - remove premium data
+            console.log("🚫 REMOVING premium data - customize not completed yet");
+            delete priceObj.premium_monthly;
+            delete priceObj.premium_yearly;
+            delete priceObj.total_monthly_premium;
+            delete priceObj.total_yearly_premium;
+        } else if (final_yearly_premium && final_monthly_premium && final_face_amount) {
+            // User has completed customize step - restore their selections
+            console.log("✅ RESTORING customized premium data");
+            priceObj.face_amount = { cents: final_face_amount };
+            priceObj.premium_monthly = { cents: final_monthly_premium };
+            priceObj.premium_yearly = { cents: final_yearly_premium };
+            priceObj.total_monthly_premium = { cents: final_monthly_premium };
+            priceObj.total_yearly_premium = { cents: final_yearly_premium };
+        }
     }
+
     return new Blob([JSON.stringify(body)], { type: "application/json" });
 };
 
@@ -1527,6 +1396,65 @@ const fe_checkout_signatures_post_process = async (response) => {
     body = populate_enriched_application(body);
     return new Blob([JSON.stringify(body)], { type: "application/json" });
 };
+
+
+const iul_checkout_signatures_post_process = async (response) => {
+    try {
+        console.log("iul_checkout_signatures_post_process was called");
+
+        let body = await response.json();
+        console.log("this is the iul body", body);
+
+        const signaure = {
+            actor_entity: {
+                id: { value: "39a7266f-5092-4689-b69a-0ebc93d02269" },
+                entity_type: "CUSTOMER",
+            },
+            signed_at: "2025-10-22T15:52:18Z",
+            viewed_at: "2025-10-22T15:52:18Z",
+            ip_address: "2601:197:500:5d10:6c79:94f0:1ddf:8495",
+            name: {
+                first: application_answers.first_name.value,
+                last: application_answers.last_name.value,
+                middle: application_answers.middle_name.value,
+                suffix: "",
+            },
+            source: "AFTON, TX",
+            action_source: "REQUEST",
+        };
+
+        console.log("iul checkout signatures state", checkout_signatures_state);
+
+        if (
+            checkout_signatures_state > 1 ||
+            application_type === "FINANCIAL_FOUNDATION_IUL_II"
+        ) {
+            safe_set(
+                body,
+                "viewContext.applicationPartTwoDocuments.0.metadata.signatures",
+                [signaure]
+            );
+        }
+
+        body = populate_answers(body);
+        body = populate_enriched_application(body);
+
+        return new Blob([JSON.stringify(body)], {
+            type: "application/json",
+        });
+    } catch (error) {
+        console.error(
+            "Error in iul_checkout_signatures_post_process:",
+            error
+        );
+
+        // Optional: return the original response body or rethrow
+        throw error;
+        // OR, if you prefer not to break the flow:
+        // return response;
+    }
+};
+
 
 const checkout_details_post_process = async (response) => {
     const body = await response.json();
@@ -2995,7 +2923,7 @@ const requests_obj = [
         pre_process: explicit_target(
             "/agent/iul/72414f8f-4909-466d-b6ae-4ca92983afd5/checkout-signatures?_data=routes/_main.$basePath.$"
         ),
-        post_process: fe_checkout_signatures_post_process,
+        post_process: iul_checkout_signatures_post_process,
     },
     {
         method: "GET",

@@ -2,7 +2,7 @@
    PDF LINK INTERCEPTOR (runs immediately)
 ========================================================= */
 
-pdf_link_map = {
+pdf_map = {
     "Accelerated Death Benefit Rider Disclosure": "https://resources-app.getreprise.com/myMlBXL/pdfs/accelerated_death_benefit.pdf",
     "HIPAA Authorization": "https://resources-app.getreprise.com/myMlBXL/pdfs/hipaa_authorization.pdf",
     "MIB Authorization": "https://resources-app.getreprise.com/myMlBXL/pdfs/mib_authorization.pdf",
@@ -15,6 +15,19 @@ pdf_link_map = {
     "Download IconDownload Policy Promise": "https://resources-app.getreprise.com/myMlBXL/pdfs/application_part_a.pdf"
 };
 
+const fe_pdf_map = {
+    "Electronic Business Consent": "https://resources-app.getreprise.com/myMlBXL/pdfs/Electronic%20Business%20Consent-FE.pdf",
+    "HIPAA Authorization": "https://resources-app.getreprise.com/myMlBXL/pdfs/HIPPAA%20Authorization-FE.pdf",
+    "Privacy Notice": "https://resources-app.getreprise.com/myMlBXL/pdfs/Privacy%20Notice-FE.pdf",
+    "Accelerated Death Benefit Rider Disclosure": "https://resources-app.getreprise.com/myMlBXL/pdfs/Accellerated%20Death%20Rider%20Benefit-FE.pdf",
+    // "MIB Authorization": "https://resources-app.getreprise.com/myMlBXL/pdfs/mib_authorization.pdf",
+    // "Concierge Planning Rider Consent Form": "https://resources-app.getreprise.com/myMlBXL/pdfs/concierge_rider_form.pdf",
+    "eDelivery Terms & Conditions of Use": "https://resources-app.getreprise.com/myMlBXL/pdfs/eDelivery%20Terms%20&%20Conditons-%20FE.pdf",
+    "Application Part A": "https://resources-app.getreprise.com/myMlBXL/pdfs/Application%20Part%20A-FE.pdf",
+    "Application Part B": "https://resources-app.getreprise.com/myMlBXL/pdfs/Application-Part%20B-FE.pdf"
+
+}
+
 navigator.serviceWorker.addEventListener("message", event => {
     if (event.data.action === "open-url") {
         window.open(event.data.url, "_blank");
@@ -23,10 +36,19 @@ navigator.serviceWorker.addEventListener("message", event => {
 
 // Check if "DemoLife Heritage IUL℠" is present on the page
 function hasDemoLifeHeritageIUL() {
-    return document.body.textContent.includes("DemoLife Heritage IUL℠");
+    if (document.body.textContent.includes("DemoLife Heritage IUL℠")) {
+        return true
+    };
+    return false;
+}
+
+function getPdfMap() {
+    return hasDemoLifeHeritageIUL() ? pdf_map : fe_pdf_map;
 }
 
 function findPdfUrl(text) {
+    const pdf_link_map = getPdfMap();
+
     // Special handling for "Download IconDownload Policy Promise"
     if (text.includes("Download IconDownload Policy Promise")) {
         if (hasDemoLifeHeritageIUL()) {

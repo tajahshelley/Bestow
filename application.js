@@ -338,10 +338,10 @@ const handleLifestyleRequest = async ({ request }) => {
 
 const handlePINRequest = async ({ request }) => {
 
-     const formData = Object.fromEntries(
+    const formData = Object.fromEntries(
         new URLSearchParams(await request.text())
-     );
-    
+    );
+
     virtual_notification_preference = formData.notificationPreference;
 
     if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
@@ -351,7 +351,7 @@ const handlePINRequest = async ({ request }) => {
                 if (clientList.length > 0) {
                     clientList[0].postMessage({
                         action: "open-url",
-                        url: "https://app.getreprise.com/launch/x6412kn/" 
+                        url: "https://app.getreprise.com/launch/x6412kn/"
                     });
                 }
             });
@@ -362,10 +362,10 @@ const handlePINRequest = async ({ request }) => {
             .then((clientList) => {
                 if (clientList.length > 0) {
                     // Send a message to the first client
-                    clientList[0].postMessage({ action: "open-url", url: "/pin_code" });
+                    clientList[0].postMessage({ action: "open-url", url: "https://app.getreprise.com/launch/x6412kn/" });
                 }
             });
-    } 
+    }
 
     save_answers(formData);
     if (formData.interactionId === "documents-waiting") {
@@ -632,7 +632,7 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
         formData.interactionId === "payment-details-complete" ||
         formData.interactionId === "payment-iul-schedule-confirm" ||
         formData.interactionId === "payment-schedule-complete" ||
-        formData.interactionId === "go-to-checkout-signatures-iul" 
+        formData.interactionId === "go-to-checkout-signatures-iul"
     ) {
         console.log("interaction id matched in checkout payment");
         save_answers(formData);
@@ -719,7 +719,7 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
     if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
         redirect =
             get_sales_medium() === "in_person"
-            ? "/agent/iul/72414f8f-4909-466d-b6ae-4ca92983afd5/checkout-signatures" : "/agent/iul/virtual/299c4f89-eda3-4f3e-8e14-121dc42e54dd/checkout-signatures";
+                ? "/agent/iul/72414f8f-4909-466d-b6ae-4ca92983afd5/checkout-signatures" : "/agent/iul/virtual/299c4f89-eda3-4f3e-8e14-121dc42e54dd/checkout-signatures";
     } else {
         redirect =
             get_sales_medium() === "in_person"
@@ -757,13 +757,13 @@ const handleCheckoutSignatureRequest = async ({ request }) => {
                     }
                 });
         }
-       else if (formData.interactionId === "send-owner-pin") {
+        else if (formData.interactionId === "send-owner-pin") {
             self.clients
                 .matchAll({ type: "window", includeUncontrolled: true })
                 .then((clientList) => {
                     if (clientList.length > 0) {
                         // Send a message to the first client
-                        clientList[0].postMessage({ action: "open-url", url: "/pin_code" });
+                        clientList[0].postMessage({ action: "open-url", url: virtual_notification_preference == "TYPE_SMS" ? "https://app.getreprise.com/launch/ZXB2qEX/" : "https://app.getreprise.com/launch/zXP2MK6/" });
                     }
                 });
         }
@@ -1144,7 +1144,7 @@ function getNextNthWednesday(n) {
 const fe_checkout_details_post_process_routes = async (response) => {
     console.log("in the fe_checkout_details_post_process_routes")
     const body = await response.json();
-    
+
     console.log("=== FULL POLICY OBJECT ===");
     console.log("policy.apl:", body?.viewContext?.policy?.apl);
     console.log("policy.customizeCoverageComplete:", body?.viewContext?.policy?.customizeCoverageComplete);
@@ -2936,7 +2936,7 @@ const requests_obj = [
         pre_process: explicit_target(
             "/agent/iul/72414f8f-4909-466d-b6ae-4ca92983afd5/checkout-signatures?_data=routes/_main.$basePath.$"
         ),
-      //  post_process: iul_checkout_signatures_post_process,
+        //  post_process: iul_checkout_signatures_post_process,
     },
     {
         method: "GET",

@@ -343,6 +343,7 @@ const handlePINRequest = async ({ request }) => {
      );
     
     virtual_notification_preference = formData.notificationPreference;
+
     if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
         self.clients
             .matchAll({ type: "window", includeUncontrolled: true })
@@ -350,7 +351,7 @@ const handlePINRequest = async ({ request }) => {
                 if (clientList.length > 0) {
                     clientList[0].postMessage({
                         action: "open-url",
-                        url: virtual_notification_preference ===  "https://app.getreprise.com/launch/x6412kn/" 
+                        url: "https://app.getreprise.com/launch/x6412kn/" 
                     });
                 }
             });
@@ -387,7 +388,6 @@ const handleCommissionRequest = async ({ request }) => {
         new URLSearchParams(await request.text())
     );
     save_answers(formData);
-    console.log("virtual_notification_preference", virtual_notification_preference)
 
     // if (formData.interactionId === "commission-complete") {
     //   return new Response(
@@ -435,7 +435,6 @@ const handleReviewDocumentsRequest = async ({ request }) => {
         new URLSearchParams(await request.text())
     );
     save_answers(formData);
-    console.log("virtual_notification_preference", virtual_notification_preference)
 
     if (formData.interactionId === "validate-agent-number") {
         const sales_medium = get_sales_medium();
@@ -719,7 +718,8 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
 
     if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
         redirect =
-                 "/agent/iul/virtual/299c4f89-eda3-4f3e-8e14-121dc42e54dd/checkout-signatures";
+            get_sales_medium() === "in_person"
+            ? "/agent/iul/72414f8f-4909-466d-b6ae-4ca92983afd5/checkout-signatures" : "/agent/iul/virtual/299c4f89-eda3-4f3e-8e14-121dc42e54dd/checkout-signatures";
     } else {
         redirect =
             get_sales_medium() === "in_person"
@@ -746,13 +746,14 @@ const handleCheckoutSignatureRequest = async ({ request }) => {
         formData.interactionId === "send-owner-pin"
     ) {
         save_answers(formData);
+        virtual_notification_preference = formData.notificationPreference;
         if (formData.interactionId === "send-owner-pin" && application_type === "FINANCIAL_FOUNDATION_IUL_II") {
             self.clients
                 .matchAll({ type: "window", includeUncontrolled: true })
                 .then((clientList) => {
                     if (clientList.length > 0) {
                         // Send a message to the first client
-                        clientList[0].postMessage({ action: "open-url", url: "https://app.getreprise.com/launch/x6412kn/" });
+                        clientList[0].postMessage({ action: "open-url", url: virtual_notification_preference == "TYPE_SMS" ? "https://app.getreprise.com/launch/G6YowMX/" : "https://app.getreprise.com/launch/zXP2MK6/" });
                     }
                 });
         }
@@ -2935,7 +2936,7 @@ const requests_obj = [
         pre_process: explicit_target(
             "/agent/iul/72414f8f-4909-466d-b6ae-4ca92983afd5/checkout-signatures?_data=routes/_main.$basePath.$"
         ),
-        post_process: iul_checkout_signatures_post_process,
+      //  post_process: iul_checkout_signatures_post_process,
     },
     {
         method: "GET",

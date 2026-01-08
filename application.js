@@ -345,7 +345,7 @@ const handlePINRequest = async ({ request }) => {
 
     // Determine the URL based on notification preference and application type
     const pinUrl = (application_type !== "FINANCIAL_FOUNDATION_IUL_II" && virtual_notification_preference === "sms")
-        ? "https://app.getreprise.com/launch/x6412kn/"
+        ? "https://app.getreprise.com/launch/x6412kn/" 
         : "https://app.getreprise.com/launch/Q6oZNey/";
 
     if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
@@ -366,9 +366,9 @@ const handlePINRequest = async ({ request }) => {
             .matchAll({ type: "window", includeUncontrolled: true })
             .then((clientList) => {
                 if (clientList.length > 0) {
-                    clientList[0].postMessage({
-                        action: "open-url",
-                        url: pinUrl
+                    clientList[0].postMessage({ 
+                        action: "open-url", 
+                        url: pinUrl 
                     });
                 }
             });
@@ -389,7 +389,7 @@ const handlePINRequest = async ({ request }) => {
         });
     }
 };
-
+                
 
 const handleCommissionRequest = async ({ request }) => {
     const formData = Object.fromEntries(
@@ -1009,49 +1009,65 @@ const overview_post_process = async (response) => {
         application_answers.stateless_address.value.postal_code
     );
 
+    // Always set face amount - use final_face_amount if available, otherwise fall back to intendedCoverage or quote data
+    const faceAmountCents = final_face_amount || 
+        (application_answers?.intendedCoverage ? parseInt(String(application_answers.intendedCoverage).replace(/,/g, "")) * 100 : null) ||
+        qoute_data?.latest_quote?.initialDeathBenefitCents;
+    
     safe_set(
         body,
         "viewContext.policy.pricingDetails.faceAmountCents",
-        qoute_data?.latest_quote?.initialDeathBenefitCents ??
-        application_answers?.intendedCoverage
+        faceAmountCents
     );
     safe_set(
         body,
         "viewContext.policy.application.applicationMetaData.initialFaceValue",
-        qoute_data?.latest_quote?.initialDeathBenefitCents ??
-        application_answers?.intendedCoverage
+        faceAmountCents
     );
     safe_set(
         body,
         "viewContext.agentOverviewTableData.policy.pricingDetails.faceAmountCents",
-        qoute_data?.latest_quote?.initialDeathBenefitCents ??
-        application_answers?.intendedCoverage
+        faceAmountCents
     );
     safe_set(
         body,
         "viewContext.associatedQuote.coverage.face_amount_cents",
-        qoute_data?.latest_quote?.initialDeathBenefitCents ??
-        application_answers?.intendedCoverage
+        faceAmountCents
     );
     safe_set(
         body,
         "viewContext.applicationMetadata.initial_face_value",
-        parseInt(qoute_data?.latest_quote?.initialDeathBenefitCents) / 100
+        faceAmountCents ? parseInt(faceAmountCents) / 100 : null
     );
-    safe_set(
-        body,
-        "viewContext.policy.pricingDetails.annualPremiumCents",
-        (qoute_data?.latest_quote?.initialMonthlyPremiumCents * 12).toString()
-    );
+    
+    // Set premium data if available
+    const yearlyPremium = final_yearly_premium || (qoute_data?.latest_quote?.initialMonthlyPremiumCents * 12);
+    if (yearlyPremium) {
+        safe_set(
+            body,
+            "viewContext.policy.pricingDetails.annualPremiumCents",
+            yearlyPremium.toString()
+        );
+    }
+    
     safe_set(body, "viewContext.policyPromiseData.policy.application.reasons", [
         "Medical history of cancer",
         "Scuba activity as disclosed on the application"
     ]);
+    
     console.log("payment_map in overview: ", payment_map, final_face_amount);
-    if (payment_map && final_face_amount) {
-        safe_set(body, "viewContext.agentOverviewTableData.policy.pricingDetails.faceAmountCents", final_face_amount);
-        safe_set(body, "viewContext.agentOverviewTableData.policy.annualPremiumCents", payment_map.yearly_premium);
-        safe_set(body, "viewContext.agentOverviewTableData.policy.grossModalPremiumCents", payment_map.monthly_premium);
+    
+    // Set premium and payment schedule data if available
+    if (final_yearly_premium && final_monthly_premium) {
+        // Set premium amounts
+        safe_set(body, "viewContext.agentOverviewTableData.policy.annualPremiumCents", final_yearly_premium);
+        safe_set(body, "viewContext.agentOverviewTableData.policy.grossModalPremiumCents", final_monthly_premium);
+        safe_set(body, "viewContext.agentOverviewTableData.policy.pricingDetails.annualPremiumCents", final_yearly_premium);
+        safe_set(body, "viewContext.agentOverviewTableData.policy.pricingDetails.monthlyPremiumCents", final_monthly_premium);
+    }
+    
+    // Set billing/payment schedule information if available
+    if (payment_map && payment_map.billing_mode && bank_account_info_map) {
         safe_set(body, "viewContext.agentOverviewTableData.policy.billing", {
             "__typename": "BillingSubscription",
             "mode": payment_map.billing_mode,
@@ -1059,8 +1075,8 @@ const overview_post_process = async (response) => {
             "items": [
                 {
                     "__typename": "SubscriptionItem",
-                    "monthlyAmount": payment_map.monthly_premium, // this doesn't matter
-                    "yearlyAmount": payment_map.yearly_premium // this doesn't matter
+                    "monthlyAmount": final_monthly_premium || 0,
+                    "yearlyAmount": final_yearly_premium || 0
                 }
             ],
             "defaultPaymentMethod": {
@@ -1074,6 +1090,12 @@ const overview_post_process = async (response) => {
                     "bankName": "UNLISTED TEST BANK"
                 }
             }
+        });
+        
+        // Set bind details for payment schedule display
+        safe_set(body, "viewContext.agentOverviewTableData.policy.bindDetails", {
+            mode: payment_map.billing_mode,
+            startDate: payment_map.start_date
         });
     }
 
@@ -1150,36 +1172,36 @@ function getNextNthWednesday(n) {
 }
 
 const fe_checkout_details_post_process_routes = async (response) => {
-    console.log("in the fe_checkout_details_post_process_routes")
-    const body = await response.json();
-    console.log("response: ", body);
-    safe_set(body, "viewContext.policy.beneficiaries", []);
-    safe_set(
-        body,
-        "viewContext.policy.pricingDetails.faceAmountCents",
-        application_answers?.intendedCoverage?.replace(/,/g, "") * 100
-    );
-    safe_set(
-        body,
-        "viewContext.policy.application.applicationMetaData.initialFaceValue",
-        application_answers?.intendedCoverage?.replace(/,/g, "")
-    );
-    safe_set(
-        body,
-        "viewContext.associatedQuote.face_amount",
-        application_answers?.intendedCoverage?.replace(/,/g, "")
-    );
-    if (body?.viewContext?.pricing?.rates[0]?.prices[0]?.face_amount?.cents) {
-        body.viewContext.pricing.rates[0].prices[0].face_amount.cents =
-            application_answers?.intendedCoverage?.replace(/,/g, "") * 100;
-    }
-    console.log("final_yearly_premium: ", final_yearly_premium);
-    if (body?.viewContext?.pricing?.rates[0]?.prices[0] && final_yearly_premium && final_monthly_premium && final_face_amount) {
-        body.viewContext.pricing.rates[0].prices[0].face_amount.cents = final_face_amount;
-        body.viewContext.pricing.rates[0].prices[0].premium_monthly.cents = final_monthly_premium;
-        body.viewContext.pricing.rates[0].prices[0].premium_yearly.cents = final_yearly_premium;
-    }
-    return new Blob([JSON.stringify(body)], { type: "application/json" });
+	console.log("in the fe_checkout_details_post_process_routes")
+	const body = await response.json();
+	console.log("response: ", body);
+	safe_set(body, "viewContext.policy.beneficiaries", []);
+	safe_set(
+		body,
+		"viewContext.policy.pricingDetails.faceAmountCents",
+		application_answers?.intendedCoverage?.replace(/,/g, "") * 100
+	);
+	safe_set(
+		body,
+		"viewContext.policy.application.applicationMetaData.initialFaceValue",
+		application_answers?.intendedCoverage?.replace(/,/g, "")
+	);
+	safe_set(
+		body,
+		"viewContext.associatedQuote.face_amount",
+		application_answers?.intendedCoverage?.replace(/,/g, "")
+	);
+	if (body?.viewContext?.pricing?.rates[0]?.prices[0]?.face_amount?.cents) {
+		body.viewContext.pricing.rates[0].prices[0].face_amount.cents =
+			application_answers?.intendedCoverage?.replace(/,/g, "") * 100;
+	}
+	console.log("final_yearly_premium: ", final_yearly_premium);
+	if (body?.viewContext?.pricing?.rates[0]?.prices[0] && final_yearly_premium && final_monthly_premium && final_face_amount) {
+		body.viewContext.pricing.rates[0].prices[0].face_amount.cents = final_face_amount;
+		body.viewContext.pricing.rates[0].prices[0].premium_monthly.cents = final_monthly_premium;
+		body.viewContext.pricing.rates[0].prices[0].premium_yearly.cents = final_yearly_premium;
+	}
+	return new Blob([JSON.stringify(body)], { type: "application/json" });
 };
 
 /**
@@ -1345,11 +1367,11 @@ const fe_checkout_payment_post_process = async (response) => {
 const fe_checkout_signatures_post_process = async (response) => {
     console.log("fe_checkout_signatures_post_process was called")
     let body = await response.json();
-
+    
     const firstName = application_answers.first_name.value;
     const lastName = application_answers.last_name.value;
     const middleName = application_answers.middle_name.value || "";
-
+    
     const signaure = {
         actor_entity: {
             id: { value: "b42cf505-49a8-4e47-aba1-53a0f4833146" },
@@ -1367,7 +1389,7 @@ const fe_checkout_signatures_post_process = async (response) => {
         source: "AFTON, TX",
         action_source: "REQUEST",
     };
-
+    
     console.log("checkout signatures state", checkout_signatures_state);
     if (checkout_signatures_state > 1 || application_type === "FINANCIAL_FOUNDATION_IUL_II") {
         safe_set(

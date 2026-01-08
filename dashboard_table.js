@@ -283,7 +283,7 @@ const quote_coverage_map = {
 //     return parsed_data;
 // }
 
-function set_entry_in_table_json(parsed_data, {
+function add_new_entry_to_table_json(parsed_data, {
     name,
     product_code,
     quoted_coverage_type,
@@ -294,47 +294,62 @@ function set_entry_in_table_json(parsed_data, {
     substatus,
     start_date
 }) {
-
-    // JSON Updates
     const applications = parsed_data.viewContext.applications;
 
+    const newApplication = JSON.parse(JSON.stringify(applications[0])); 
+
     if (name) {
-        applications[0].applicant.name = name;
-    }
-    if (product_code) {
-        applications[0].product.product_code = product_code;
-    }
-    if (quoted_coverage_type) {
-        applications[0].quote.risk_class = quoted_coverage_type;
-    }
-    if (quoted_coverage_amt) {
-        applications[0].quote.face_amount = parseFloat(quoted_coverage_amt.replace(/[$,]/g, '')).toFixed(2);
-    }
-    if (approved_coverage_type || approved_coverage_amt) {
-        if (!applications[0].policy) {
-            applications[0]["policy"] = policy_obj.policy;
-            applications[0]["policy_id"] = policy_obj.policy_id;
+        const [firstName, ...lastNameParts] = name.split(' ');
+        newApplication.applicant.name = name;
+        if (newApplication.applicant.firstName !== undefined) {
+            newApplication.applicant.firstName = firstName;
+            newApplication.applicant.lastName = lastNameParts.join(' ');
         }
-        if (approved_coverage_type) {
-            applications[0].policy.risk_class = approved_coverage_type.toUpperCase();
-        }
-        if (approved_coverage_amt) {
-            applications[0].policy.face_amount.cents = approved_coverage_amt.replace(/[$,]/g, '') * 100;
-        }
-    }
-    if (start_date) {
-        const [month, day, year] = start_date.split("/");
-        console.log("month, day, year: ", month, day, year);
-        applications[0].date_started_iso = `${year}-${month}-${day}T08:57:16`
-    }
-    if (status) {
-        applications[0].application_status = status;
-    }
-    if (substatus) {
-        applications[0].application_substatus = substatus;
     }
 
-    parsed_data.viewContext.applications = applications;
+    if (product_code) {
+        newApplication.product.product_code = product_code;
+    }
+
+    if (quoted_coverage_type) {
+        newApplication.quote.risk_class = quoted_coverage_type;
+    }
+
+    if (quoted_coverage_amt) {
+        newApplication.quote.face_amount = parseFloat(quoted_coverage_amt.replace(/[$,]/g, '')).toFixed(2);
+    }
+
+    if (approved_coverage_type || approved_coverage_amt) {
+        if (!newApplication.policy) {
+            newApplication["policy"] = JSON.parse(JSON.stringify(policy_obj.policy));
+            newApplication["policy_id"] = "new-policy-" + Date.now();
+        }
+        if (approved_coverage_type) {
+            newApplication.policy.risk_class = approved_coverage_type.toUpperCase();
+        }
+        if (approved_coverage_amt) {
+            newApplication.policy.face_amount.cents = approved_coverage_amt.replace(/[$,]/g, '') * 100;
+        }
+    }
+
+    if (start_date) {
+        const [month, day, year] = start_date.split("/");
+        newApplication.date_started_iso = `${year}-${month}-${day}T08:57:16`;
+    }
+
+    if (status) {
+        newApplication.application_status = status;
+    }
+
+    if (substatus) {
+        newApplication.application_substatus = substatus;
+    }
+
+    newApplication.id = "app-" + Date.now();
+    newApplication.application_id = "APP-" + Date.now();
+
+    parsed_data.viewContext.applications.unshift(newApplication);
+
     return parsed_data;
 }
 
@@ -390,29 +405,31 @@ replay_backend.get("/agent/dashboard", (request, body) => {
         new URL(request.url).searchParams.get("_data") ===
         "routes/_main.$basePath.$"
     ) && formData.interactionId !== "sync-agent";
-    console.log("request filter: ", filter);
+    console.log("Dashboard request filter: ", filter);
     return filter;
 }).post_process(async (resp) => {
     let json_resp = await resp.json();
     const app_info = await replay_backend.storage.get("app_info");
 
     if (app_info && json_resp.viewContext?.applications) {
+        console.log("Adding new application to top of dashboard table");
+
         const name = app_info.viewContext.owner.first_name + " " + app_info.viewContext.owner.last_name;
         const type = app_info.viewContext.policy.riskClass.toLowerCase();
         const product_code = app_info.viewContext.policy.offers[0].products[0].productCode;
         const start_date_obj = new Date();
-        const month = start_date_obj.getUTCMonth() + 1; // months from 1-12
+        const month = start_date_obj.getUTCMonth() + 1;
         const day = start_date_obj.getUTCDate();
         const year = start_date_obj.getUTCFullYear();
 
-        // Using padded values, so that 2023/1/7 becomes 2023/01/07
         const pMonth = month.toString().padStart(2, "0");
         const pDay = day.toString().padStart(2, "0");
-        const start_date = `${pMonth}/${pDay}/${year}`
-        // Update table entry through JSON
-        const updated_data = set_entry_in_table_json(json_resp, {
+        const start_date = `${pMonth}/${pDay}/${year}`;
+
+        // Use the NEW function that adds instead of modifying
+        const updated_data = add_new_entry_to_table_json(json_resp, {
             name,
-            product_code, // or "TAIUL01"
+            product_code,
             quoted_coverage_type: type,
             quoted_coverage_amt: "$87,765",
             approved_coverage_type: type,
@@ -421,8 +438,12 @@ replay_backend.get("/agent/dashboard", (request, body) => {
             substatus: null,
             start_date,
         });
-        console.log("Updated data: ", updated_data);
+
+        console.log("Updated dashboard with new entry. Total applications:", updated_data.viewContext.applications.length);
         json_resp = updated_data;
+
+        // Clear the app_info so we don't add it again on next dashboard load
+        await replay_backend.storage.delete("app_info");
     }
 
     return JSON.stringify(json_resp);

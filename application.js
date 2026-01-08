@@ -343,6 +343,11 @@ const handlePINRequest = async ({ request }) => {
 
     virtual_notification_preference = formData.notificationPreference;
 
+    // Determine the URL based on notification preference and application type
+    const pinUrl = (application_type !== "FINANCIAL_FOUNDATION_IUL_II" && virtual_notification_preference === "sms")
+        ? "https://app.getreprise.com/launch/x6412kn/"
+        : "https://app.getreprise.com/launch/Q6oZNey/";
+
     if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
         self.clients
             .matchAll({ type: "window", includeUncontrolled: true })
@@ -350,18 +355,21 @@ const handlePINRequest = async ({ request }) => {
                 if (clientList.length > 0) {
                     clientList[0].postMessage({
                         action: "open-url",
-                        url: "https://app.getreprise.com/launch/x6412kn/"
+                        url: pinUrl
                     });
                 }
             });
     }
     else {
+        // FE workflow
         self.clients
             .matchAll({ type: "window", includeUncontrolled: true })
             .then((clientList) => {
                 if (clientList.length > 0) {
-                    // Send a message to the first client
-                    clientList[0].postMessage({ action: "open-url", url: "https://app.getreprise.com/launch/x6412kn/" });
+                    clientList[0].postMessage({
+                        action: "open-url",
+                        url: pinUrl
+                    });
                 }
             });
     }
@@ -381,6 +389,7 @@ const handlePINRequest = async ({ request }) => {
         });
     }
 };
+
 
 const handleCommissionRequest = async ({ request }) => {
     const formData = Object.fromEntries(
@@ -762,7 +771,7 @@ const handleCheckoutSignatureRequest = async ({ request }) => {
                 .then((clientList) => {
                     if (clientList.length > 0) {
                         // Send a message to the first client
-                        clientList[0].postMessage({ action: "open-url", url: virtual_notification_preference == "TYPE_SMS" ? "https://app.getreprise.com/launch/ZXB2qEX/" : "https://app.getreprise.com/launch/zXP2MK6/" });
+                        clientList[0].postMessage({ action: "open-url", url: virtual_notification_preference == "TYPE_SMS" ? "https://app.getreprise.com/launch/ZXB2qEX/" : "https://app.getreprise.com/launch/dyR29Ny/" });
                     }
                 });
         }
@@ -1141,36 +1150,36 @@ function getNextNthWednesday(n) {
 }
 
 const fe_checkout_details_post_process_routes = async (response) => {
-	console.log("in the fe_checkout_details_post_process_routes")
-	const body = await response.json();
-	console.log("response: ", body);
-	safe_set(body, "viewContext.policy.beneficiaries", []);
-	safe_set(
-		body,
-		"viewContext.policy.pricingDetails.faceAmountCents",
-		application_answers?.intendedCoverage?.replace(/,/g, "") * 100
-	);
-	safe_set(
-		body,
-		"viewContext.policy.application.applicationMetaData.initialFaceValue",
-		application_answers?.intendedCoverage?.replace(/,/g, "")
-	);
-	safe_set(
-		body,
-		"viewContext.associatedQuote.face_amount",
-		application_answers?.intendedCoverage?.replace(/,/g, "")
-	);
-	if (body?.viewContext?.pricing?.rates[0]?.prices[0]?.face_amount?.cents) {
-		body.viewContext.pricing.rates[0].prices[0].face_amount.cents =
-			application_answers?.intendedCoverage?.replace(/,/g, "") * 100;
-	}
-	console.log("final_yearly_premium: ", final_yearly_premium);
-	if (body?.viewContext?.pricing?.rates[0]?.prices[0] && final_yearly_premium && final_monthly_premium && final_face_amount) {
-		body.viewContext.pricing.rates[0].prices[0].face_amount.cents = final_face_amount;
-		body.viewContext.pricing.rates[0].prices[0].premium_monthly.cents = final_monthly_premium;
-		body.viewContext.pricing.rates[0].prices[0].premium_yearly.cents = final_yearly_premium;
-	}
-	return new Blob([JSON.stringify(body)], { type: "application/json" });
+    console.log("in the fe_checkout_details_post_process_routes")
+    const body = await response.json();
+    console.log("response: ", body);
+    safe_set(body, "viewContext.policy.beneficiaries", []);
+    safe_set(
+        body,
+        "viewContext.policy.pricingDetails.faceAmountCents",
+        application_answers?.intendedCoverage?.replace(/,/g, "") * 100
+    );
+    safe_set(
+        body,
+        "viewContext.policy.application.applicationMetaData.initialFaceValue",
+        application_answers?.intendedCoverage?.replace(/,/g, "")
+    );
+    safe_set(
+        body,
+        "viewContext.associatedQuote.face_amount",
+        application_answers?.intendedCoverage?.replace(/,/g, "")
+    );
+    if (body?.viewContext?.pricing?.rates[0]?.prices[0]?.face_amount?.cents) {
+        body.viewContext.pricing.rates[0].prices[0].face_amount.cents =
+            application_answers?.intendedCoverage?.replace(/,/g, "") * 100;
+    }
+    console.log("final_yearly_premium: ", final_yearly_premium);
+    if (body?.viewContext?.pricing?.rates[0]?.prices[0] && final_yearly_premium && final_monthly_premium && final_face_amount) {
+        body.viewContext.pricing.rates[0].prices[0].face_amount.cents = final_face_amount;
+        body.viewContext.pricing.rates[0].prices[0].premium_monthly.cents = final_monthly_premium;
+        body.viewContext.pricing.rates[0].prices[0].premium_yearly.cents = final_yearly_premium;
+    }
+    return new Blob([JSON.stringify(body)], { type: "application/json" });
 };
 
 /**
@@ -1336,11 +1345,11 @@ const fe_checkout_payment_post_process = async (response) => {
 const fe_checkout_signatures_post_process = async (response) => {
     console.log("fe_checkout_signatures_post_process was called")
     let body = await response.json();
-    
+
     const firstName = application_answers.first_name.value;
     const lastName = application_answers.last_name.value;
     const middleName = application_answers.middle_name.value || "";
-    
+
     const signaure = {
         actor_entity: {
             id: { value: "b42cf505-49a8-4e47-aba1-53a0f4833146" },
@@ -1358,7 +1367,7 @@ const fe_checkout_signatures_post_process = async (response) => {
         source: "AFTON, TX",
         action_source: "REQUEST",
     };
-    
+
     console.log("checkout signatures state", checkout_signatures_state);
     if (checkout_signatures_state > 1 || application_type === "FINANCIAL_FOUNDATION_IUL_II") {
         safe_set(

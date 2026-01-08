@@ -20,11 +20,12 @@ const fe_pdf_map = {
     "HIPAA Authorization": "https://resources-app.getreprise.com/myMlBXL/pdfs/HIPPAA%20Authorization-FE.pdf",
     "Privacy Notice": "https://resources-app.getreprise.com/myMlBXL/pdfs/Privacy%20Notice-FE.pdf",
     "Accelerated Death Benefit Rider Disclosure": "https://resources-app.getreprise.com/myMlBXL/pdfs/Accellerated%20Death%20Rider%20Benefit-FE.pdf",
-    // "MIB Authorization": "https://resources-app.getreprise.com/myMlBXL/pdfs/mib_authorization.pdf",
-    // "Concierge Planning Rider Consent Form": "https://resources-app.getreprise.com/myMlBXL/pdfs/concierge_rider_form.pdf",
+    "MIB Authorization": "https://resources-app.getreprise.com/myMlBXL/pdfs/MIB%20Authorization-FE.pdf",
+    "Concierge Planning Rider Consent Form": "https://resources-app.getreprise.com/myMlBXL/pdfs/concierge_rider_form.pdf",
     "eDelivery Terms & Conditions of Use": "https://resources-app.getreprise.com/myMlBXL/pdfs/eDelivery%20Terms%20&%20Conditons-%20FE.pdf",
     "Application Part A": "https://resources-app.getreprise.com/myMlBXL/pdfs/Application%20Part%20A-FE.pdf",
-    "Application Part B": "https://resources-app.getreprise.com/myMlBXL/pdfs/Application-Part%20B-FE.pdf"
+    "Application Part B": "https://resources-app.getreprise.com/myMlBXL/pdfs/Application-Part%20B-FE.pdf",
+    "Agent Report": "https://resources-app.getreprise.com/myMlBXL/pdfs/Agent%20Report-IUL.pdf",
 
 }
 

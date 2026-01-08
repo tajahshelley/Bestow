@@ -7,7 +7,6 @@ let underwriting_state = 0;
 let checkout_signatures_state = 0;
 let apl = "enabled";
 let virtual_notification_preference = "";
-var customize_coverage_completed = false;
 
 // code for pre-approval flow
 
@@ -1142,74 +1141,36 @@ function getNextNthWednesday(n) {
 }
 
 const fe_checkout_details_post_process_routes = async (response) => {
-    console.log("in the fe_checkout_details_post_process_routes")
-    const body = await response.json();
-
-    console.log("=== FULL POLICY OBJECT ===");
-    console.log("policy.apl:", body?.viewContext?.policy?.apl);
-    console.log("policy.customizeCoverageComplete:", body?.viewContext?.policy?.customizeCoverageComplete);
-    console.log("policy.bindDetails:", body?.viewContext?.policy?.bindDetails);
-    console.log("policy.pricingDetails:", body?.viewContext?.policy?.pricingDetails);
-    console.log("=== CHECK FOR COMPLETION FLAGS ===");
-    console.log("Full policy object:", JSON.stringify(body?.viewContext?.policy, null, 2));
-    console.log("================================");
-
-    // Set beneficiaries
-    if (beneficiaries.length === 0) {
-        safe_set(body, "viewContext.policy.beneficiaries", []);
-    } else {
-        safe_set(body, "viewContext.policy.beneficiaries", beneficiaries);
-    }
-
-    // Set face amounts
-    safe_set(
-        body,
-        "viewContext.policy.pricingDetails.faceAmountCents",
-        application_answers?.intendedCoverage?.replace(/,/g, "") * 100
-    );
-    safe_set(
-        body,
-        "viewContext.policy.application.applicationMetaData.initialFaceValue",
-        application_answers?.intendedCoverage?.replace(/,/g, "")
-    );
-    safe_set(
-        body,
-        "viewContext.associatedQuote.face_amount",
-        application_answers?.intendedCoverage?.replace(/,/g, "")
-    );
-
-    // Always set face amount in pricing
-    if (body?.viewContext?.pricing?.rates[0]?.prices[0]?.face_amount?.cents) {
-        body.viewContext.pricing.rates[0].prices[0].face_amount.cents =
-            application_answers?.intendedCoverage?.replace(/,/g, "") * 100;
-    }
-
-    console.log("final_yearly_premium: ", final_yearly_premium);
-    console.log("customize_coverage_completed: ", customize_coverage_completed);
-
-    // ✅ Handle premium data based on completion state
-    if (body?.viewContext?.pricing?.rates[0]?.prices[0]) {
-        const priceObj = body.viewContext.pricing.rates[0].prices[0];
-
-        if (!customize_coverage_completed) {
-            // User hasn't completed customize step yet - remove premium data
-            console.log("🚫 REMOVING premium data - customize not completed yet");
-            delete priceObj.premium_monthly;
-            delete priceObj.premium_yearly;
-            delete priceObj.total_monthly_premium;
-            delete priceObj.total_yearly_premium;
-        } else if (final_yearly_premium && final_monthly_premium && final_face_amount) {
-            // User has completed customize step - restore their selections
-            console.log("✅ RESTORING customized premium data");
-            priceObj.face_amount = { cents: final_face_amount };
-            priceObj.premium_monthly = { cents: final_monthly_premium };
-            priceObj.premium_yearly = { cents: final_yearly_premium };
-            priceObj.total_monthly_premium = { cents: final_monthly_premium };
-            priceObj.total_yearly_premium = { cents: final_yearly_premium };
-        }
-    }
-
-    return new Blob([JSON.stringify(body)], { type: "application/json" });
+	console.log("in the fe_checkout_details_post_process_routes")
+	const body = await response.json();
+	console.log("response: ", body);
+	safe_set(body, "viewContext.policy.beneficiaries", []);
+	safe_set(
+		body,
+		"viewContext.policy.pricingDetails.faceAmountCents",
+		application_answers?.intendedCoverage?.replace(/,/g, "") * 100
+	);
+	safe_set(
+		body,
+		"viewContext.policy.application.applicationMetaData.initialFaceValue",
+		application_answers?.intendedCoverage?.replace(/,/g, "")
+	);
+	safe_set(
+		body,
+		"viewContext.associatedQuote.face_amount",
+		application_answers?.intendedCoverage?.replace(/,/g, "")
+	);
+	if (body?.viewContext?.pricing?.rates[0]?.prices[0]?.face_amount?.cents) {
+		body.viewContext.pricing.rates[0].prices[0].face_amount.cents =
+			application_answers?.intendedCoverage?.replace(/,/g, "") * 100;
+	}
+	console.log("final_yearly_premium: ", final_yearly_premium);
+	if (body?.viewContext?.pricing?.rates[0]?.prices[0] && final_yearly_premium && final_monthly_premium && final_face_amount) {
+		body.viewContext.pricing.rates[0].prices[0].face_amount.cents = final_face_amount;
+		body.viewContext.pricing.rates[0].prices[0].premium_monthly.cents = final_monthly_premium;
+		body.viewContext.pricing.rates[0].prices[0].premium_yearly.cents = final_yearly_premium;
+	}
+	return new Blob([JSON.stringify(body)], { type: "application/json" });
 };
 
 /**

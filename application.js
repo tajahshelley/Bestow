@@ -1375,6 +1375,11 @@ const fe_checkout_payment_post_process = async (response) => {
 const fe_checkout_signatures_post_process = async (response) => {
     console.log("fe_checkout_signatures_post_process was called")
     let body = await response.json();
+    
+    const firstName = application_answers.first_name.value;
+    const lastName = application_answers.last_name.value;
+    const middleName = application_answers.middle_name.value || "";
+    
     const signaure = {
         actor_entity: {
             id: { value: "b42cf505-49a8-4e47-aba1-53a0f4833146" },
@@ -1384,14 +1389,15 @@ const fe_checkout_signatures_post_process = async (response) => {
         viewed_at: "2025-10-22T15:52:18Z",
         ip_address: "2601:197:500:5d10:6c79:94f0:1ddf:8495",
         name: {
-            first: application_answers.first_name.value,
-            last: application_answers.last_name.value,
-            middle: application_answers.middle_name.value,
+            first: firstName,
+            last: lastName,
+            middle: middleName,
             suffix: "",
         },
         source: "AFTON, TX",
         action_source: "REQUEST",
     };
+    
     console.log("checkout signatures state", checkout_signatures_state);
     if (checkout_signatures_state > 1 || application_type === "FINANCIAL_FOUNDATION_IUL_II") {
         safe_set(
@@ -1405,6 +1411,33 @@ const fe_checkout_signatures_post_process = async (response) => {
             [signaure]
         );
     }
+
+    // Set all possible name field paths that might be used for display
+    // Owner fields
+    safe_set(body, "viewContext.owner.first_name", firstName);
+    safe_set(body, "viewContext.owner.last_name", lastName);
+    safe_set(body, "viewContext.owner.middle_name", middleName);
+
+    // Insured fields  
+    safe_set(body, "viewContext.insured.first_name", firstName);
+    safe_set(body, "viewContext.insured.last_name", lastName);
+    safe_set(body, "viewContext.insured.middle_name", middleName);
+
+    // Policy owner name fields
+    safe_set(body, "viewContext.policy.owner.name.first", firstName);
+    safe_set(body, "viewContext.policy.owner.name.last", lastName);
+    safe_set(body, "viewContext.policy.owner.name.middle", middleName);
+
+    // Policy payor name fields
+    safe_set(body, "viewContext.policy.payor.name.first", firstName);
+    safe_set(body, "viewContext.policy.payor.name.last", lastName);
+    safe_set(body, "viewContext.policy.payor.name.middle", middleName);
+
+    // Policy insured name fields
+    safe_set(body, "viewContext.policy.insured.name.first", firstName);
+    safe_set(body, "viewContext.policy.insured.name.last", lastName);
+    safe_set(body, "viewContext.policy.insured.name.middle", middleName);
+
     body = populate_answers(body);
     body = populate_enriched_application(body);
     return new Blob([JSON.stringify(body)], { type: "application/json" });
@@ -2198,6 +2231,31 @@ const requests_obj_fe = [
             "/agent/virtual/ea6579b3-1912-4358-990c-5541b91a110b/checkout-payment?_data=routes/_main.$basePath.$"
         ),
         post_process: fe_checkout_payment_post_process,
+    },
+    {
+        method: "GET",
+        url: "/agent/virtual/:id/checkout-signatures",
+        interception_condition: "routes/_main.$basePath.$",
+        pre_process: explicit_target(
+            "/agent/virtual/ea6579b3-1912-4358-990c-5541b91a110b/checkout-signatures?_data=routes/_main.$basePath.$",
+            () => {
+                console.log(
+                    "FE virtual checkout signatures state in pre process",
+                    checkout_signatures_state
+                );
+                checkout_signatures_state++;
+            }
+        ),
+        post_process: fe_checkout_signatures_post_process,
+    },
+    {
+        method: "GET",
+        url: "/agent/virtual/:id/checkout-review",
+        interception_condition: "routes/_main.$basePath.$",
+        pre_process: explicit_target(
+            "/agent/virtual/ea6579b3-1912-4358-990c-5541b91a110b/checkout-review?_data=routes/_main.$basePath.$"
+        ),
+        post_process: fe_checkout_review_post_process,
     },
 ];
 

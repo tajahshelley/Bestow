@@ -213,6 +213,19 @@ const handleReplacementRequest = async ({ request }) => {
     ) {
         const salesMedium = get_sales_medium();
 
+        // if it is is iul set for pfds
+        if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
+            self.clients
+                .matchAll({ type: "window", includeUncontrolled: true })
+                .then((clientList) => {
+                    if (clientList.length > 0) {
+                        clientList[0].postMessage({
+                            action: "open-iul-for-pdfs",
+                        });
+                    }
+                });
+        }
+
         let redirect;
 
         if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
@@ -344,9 +357,9 @@ const handlePINRequest = async ({ request }) => {
     virtual_notification_preference = formData.notificationPreference;
 
     // Determine the URL based on notification preference and application type
-    const pinUrl = (application_type !== "FINANCIAL_FOUNDATION_IUL_II" && virtual_notification_preference === "sms")
-        ? "https://app.getreprise.com/launch/x6412kn/" 
-        : "https://app.getreprise.com/launch/Q6oZNey/";
+    const pinUrl = (application_type !== "FINANCIAL_FOUNDATION_IUL_II" && virtual_notification_preference === "TYPE_EMAIL")
+    ? "https://app.getreprise.com/launch/Q6oZNey/"
+    : "https://app.getreprise.com/launch/x6412kn/"
 
     if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
         self.clients
@@ -366,9 +379,9 @@ const handlePINRequest = async ({ request }) => {
             .matchAll({ type: "window", includeUncontrolled: true })
             .then((clientList) => {
                 if (clientList.length > 0) {
-                    clientList[0].postMessage({ 
-                        action: "open-url", 
-                        url: pinUrl 
+                    clientList[0].postMessage({
+                        action: "open-url",
+                        url: pinUrl
                     });
                 }
             });
@@ -389,7 +402,7 @@ const handlePINRequest = async ({ request }) => {
         });
     }
 };
-                
+
 
 const handleCommissionRequest = async ({ request }) => {
     const formData = Object.fromEntries(
@@ -488,7 +501,7 @@ const handleUnderwritingRequest = async ({ request }) => {
             //  approved link/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/approval
             app_approved = true;
             if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
-                redirect = "/agent/iul/virtual/d516613c-f743-4a52-a51d-8e360386cfe7/approval";
+                redirect = get_sales_medium() === "in_person" ? "/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/approval" :"/agent/iul/virtual/d516613c-f743-4a52-a51d-8e360386cfe7/approval" 
             } else {
                 redirect =
                     get_sales_medium() === "in_person"
@@ -626,24 +639,24 @@ let secondary_contact_map = null;
 let bank_account_info_map = null;
 let credit_card_info_map = null;
 
-
-
 const handleCheckoutPaymentRequest = async ({ request }) => {
     const formData = Object.fromEntries(
         new URLSearchParams(await request.text())
     );
+
     console.log("formData in checkout payment", formData);
-    console.log("formData in checkout interactionId", formData.interactionId);
+    console.log("formData.interactionId:", formData.interactionId);
+
     if (
         formData.interactionId === "payment-schedule-confirm" ||
         formData.interactionId === "billing-info-complete" ||
         formData.interactionId === "payment-details-complete" ||
         formData.interactionId === "payment-iul-schedule-confirm" ||
-        formData.interactionId === "payment-schedule-complete" ||
-        formData.interactionId === "go-to-checkout-signatures-iul"
+        formData.interactionId === "payment-schedule-complete"
     ) {
         console.log("interaction id matched in checkout payment");
         save_answers(formData);
+
         const res = {
             type: "state-success",
             interactionId: formData.interactionId,
@@ -651,7 +664,7 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
             data: "",
         };
 
-        if ("payment-iul-schedule-confirm") {
+        if (formData.interactionId === "payment-iul-schedule-confirm") {
             payment_map = null;
             final_yearly_premium = parseInt(formData.yearly_premium || 0);
             final_monthly_premium = parseInt(formData.monthly_premium || 0);
@@ -663,8 +676,9 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
                 monthly_premium: formData.monthly_premium || null,
                 billing_schedule: formData.billing_schedule || null,
                 start_date: formData.start_date || null,
-            }
+            };
             console.log("payment_map: ", payment_map);
+            console.log("Captured final values:", { final_monthly_premium, final_yearly_premium, final_face_amount });
         }
 
         if (formData.interactionId === "payment-schedule-complete") {
@@ -679,7 +693,15 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
                 radioInput: formData.radioInput || null
             };
             console.log("payment_map: ", payment_map);
+
+            final_monthly_premium = parseInt(formData.monthly_premium || 0);
+            final_yearly_premium = parseInt(formData.yearly_premium || 0);
+            if (application_answers?.intendedCoverage) {
+                final_face_amount = parseInt(String(application_answers.intendedCoverage).replace(/,/g, "")) * 100;
+            }
+            console.log("Captured final values:", { final_monthly_premium, final_yearly_premium, final_face_amount });
         }
+
         if (formData.interactionId === "billing-info-complete") {
             // checking if there is secondary contact information
             if (formData["secondary_contact.full_name.first"]) {
@@ -694,7 +716,7 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
                     postal_code: formData["secondary_contact.address.postal_code"] || null,
                     phone: formData["secondary_contact.phone"] || null,
                     email: formData["secondary_contact.email"] || null
-                }
+                };
             }
         }
 
@@ -709,12 +731,12 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
                     account_type: formData["ach_payment_data.account_type"] === "AT_CHECKING" ? "checking" : "savings",
                     account_number_token: "782b19b5-3f4e-4351-b670-ff7920d6236d",
                     routing_number: formData["ach_payment_data.routing_number"]
-                }
+                };
             } else if (formData.payment_method_type === "CARD") {
-                // do nothing for now
                 credit_card_info_map = null;
             }
         }
+
         return new Response(JSON.stringify(res), {
             status: 200,
             headers: {
@@ -722,12 +744,68 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
             },
         });
     }
+
+    if (formData.interactionId === "go-to-checkout-signatures") {
+        console.log(">>> Capturing data from go-to-checkout-signatures");
+
+        save_answers(formData);
+
+        if (formData.monthly_premium) {
+            final_monthly_premium = parseInt(formData.monthly_premium);
+            console.log("Captured final_monthly_premium:", final_monthly_premium);
+        }
+        if (formData.yearly_premium) {
+            final_yearly_premium = parseInt(formData.yearly_premium);
+            console.log("Captured final_yearly_premium:", final_yearly_premium);
+        }
+
+        if (!final_face_amount && application_answers?.intendedCoverage) {
+            final_face_amount = parseInt(String(application_answers.intendedCoverage).replace(/,/g, "")) * 100;
+            console.log("Calculated final_face_amount:", final_face_amount);
+        }
+
+        if (formData.billing_mode || formData.monthly_premium || formData.start_date) {
+            payment_map = {
+                ...payment_map, 
+                billing_mode: formData.billing_mode || payment_map?.billing_mode || null,
+                monthly_premium: formData.monthly_premium || payment_map?.monthly_premium || null,
+                yearly_premium: formData.yearly_premium || payment_map?.yearly_premium || null,
+                billing_schedule: formData.billing_schedule || payment_map?.billing_schedule || null,
+                ssbb_payment_schedule: formData.ssbb_payment_schedule || payment_map?.ssbb_payment_schedule || null,
+                start_date: formData.start_date || payment_map?.start_date || null,
+            };
+            console.log("Updated payment_map:", payment_map);
+        }
+
+        if (formData.price) {
+            final_monthly_premium = parseInt(formData.price);
+            final_yearly_premium = Math.round(final_monthly_premium / 0.086);
+            payment_map = {
+                billing_mode: "MONTHLY",
+                monthly_premium: final_monthly_premium,
+                yearly_premium: final_yearly_premium,
+                billing_schedule: null,
+                ssbb_payment_schedule: null,
+                start_date: new Date().toISOString()
+            };
+            console.log("Set payment_map from price:", payment_map);
+        }
+
+        console.log("Final captured values before redirect:", {
+            final_monthly_premium,
+            final_yearly_premium,
+            final_face_amount,
+            payment_map
+        });
+    }
+
     let redirect;
 
     if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
         redirect =
             get_sales_medium() === "in_person"
-                ? "/agent/iul/72414f8f-4909-466d-b6ae-4ca92983afd5/checkout-signatures" : "/agent/iul/virtual/299c4f89-eda3-4f3e-8e14-121dc42e54dd/checkout-signatures";
+                ? "/agent/iul/72414f8f-4909-466d-b6ae-4ca92983afd5/checkout-signatures"
+                : "/agent/iul/virtual/299c4f89-eda3-4f3e-8e14-121dc42e54dd/checkout-signatures";
     } else {
         redirect =
             get_sales_medium() === "in_person"
@@ -926,7 +1004,7 @@ const approval_post_process = async (response) => {
             "viewContext.iulIllustration.data",
             qoute_data?.latest_quote
         );
-    // body.viewContext.iulIllustration.data = qoute_data.latest_quote; // populates the same numbers as the approved quote
+    body.viewContext.iulIllustration.data = qoute_data.latest_quote; // populates the same numbers as the approved quote
     body.viewContext.owner.first_name = application_answers.first_name.value;
     body.viewContext.owner.middle_name = application_answers.middle_name.value;
     body.viewContext.owner.last_name = application_answers.last_name.value;
@@ -935,8 +1013,21 @@ const approval_post_process = async (response) => {
 };
 
 const overview_post_process = async (response) => {
-    console.log("are we here?", application_answers, qoute_data);
+    console.log("overview_post_process - Input data:", {
+        payment_map,
+        final_face_amount,
+        final_yearly_premium,
+        final_monthly_premium,
+        bank_account_info_map,
+        credit_card_info_map
+    });
+
     const body = await response.json();
+
+    // Log existing billing data to see what we're overwriting
+    console.log("Existing billing data:", body?.viewContext?.agentOverviewTableData?.policy?.billing);
+
+    // Set owner information
     safe_set(
         body,
         "viewContext.agentOverviewTableData.policy.owner.name.first",
@@ -973,6 +1064,7 @@ const overview_post_process = async (response) => {
         application_answers.stateless_address.value.postal_code
     );
 
+    // Set insured information
     safe_set(
         body,
         "viewContext.agentOverviewTableData.policy.insured.name.first",
@@ -1009,100 +1101,168 @@ const overview_post_process = async (response) => {
         application_answers.stateless_address.value.postal_code
     );
 
-    // Always set face amount - use final_face_amount if available, otherwise fall back to intendedCoverage or quote data
-    const faceAmountCents = final_face_amount || 
+    // Calculate face amount - prioritize final_face_amount, then application answers, then quote data
+    const faceAmountCents = final_face_amount ||
         (application_answers?.intendedCoverage ? parseInt(String(application_answers.intendedCoverage).replace(/,/g, "")) * 100 : null) ||
         qoute_data?.latest_quote?.initialDeathBenefitCents;
-    
-    safe_set(
-        body,
-        "viewContext.policy.pricingDetails.faceAmountCents",
-        faceAmountCents
-    );
-    safe_set(
-        body,
-        "viewContext.policy.application.applicationMetaData.initialFaceValue",
-        faceAmountCents
-    );
-    safe_set(
-        body,
-        "viewContext.agentOverviewTableData.policy.pricingDetails.faceAmountCents",
-        faceAmountCents
-    );
-    safe_set(
-        body,
-        "viewContext.associatedQuote.coverage.face_amount_cents",
-        faceAmountCents
-    );
-    safe_set(
-        body,
-        "viewContext.applicationMetadata.initial_face_value",
-        faceAmountCents ? parseInt(faceAmountCents) / 100 : null
-    );
-    
-    // Set premium data if available
-    const yearlyPremium = final_yearly_premium || (qoute_data?.latest_quote?.initialMonthlyPremiumCents * 12);
-    if (yearlyPremium) {
-        safe_set(
-            body,
-            "viewContext.policy.pricingDetails.annualPremiumCents",
-            yearlyPremium.toString()
-        );
+
+    if (faceAmountCents) {
+        safe_set(body, "viewContext.policy.pricingDetails.faceAmountCents", faceAmountCents);
+        safe_set(body, "viewContext.policy.application.applicationMetaData.initialFaceValue", faceAmountCents);
+        safe_set(body, "viewContext.agentOverviewTableData.policy.pricingDetails.faceAmountCents", faceAmountCents);
+        safe_set(body, "viewContext.associatedQuote.coverage.face_amount_cents", faceAmountCents);
+        safe_set(body, "viewContext.applicationMetadata.initial_face_value", parseInt(faceAmountCents) / 100);
     }
-    
+
+    // Set premium amounts - prioritize final values over quote data
+    const yearlyPremiumCents = final_yearly_premium ||
+        payment_map?.yearly_premium ||
+        (qoute_data?.latest_quote?.initialMonthlyPremiumCents ? qoute_data.latest_quote.initialMonthlyPremiumCents * 12 : null);
+
+    const monthlyPremiumCents = final_monthly_premium ||
+        payment_map?.monthly_premium ||
+        qoute_data?.latest_quote?.initialMonthlyPremiumCents;
+
+    if (yearlyPremiumCents) {
+        safe_set(body, "viewContext.policy.pricingDetails.annualPremiumCents", yearlyPremiumCents.toString());
+        safe_set(body, "viewContext.agentOverviewTableData.policy.annualPremiumCents", yearlyPremiumCents);
+        safe_set(body, "viewContext.agentOverviewTableData.policy.pricingDetails.annualPremiumCents", yearlyPremiumCents);
+    }
+
+    if (monthlyPremiumCents) {
+        safe_set(body, "viewContext.agentOverviewTableData.policy.grossModalPremiumCents", monthlyPremiumCents);
+        safe_set(body, "viewContext.agentOverviewTableData.policy.pricingDetails.monthlyPremiumCents", monthlyPremiumCents);
+    }
+
+    // Set policy promise reasons
     safe_set(body, "viewContext.policyPromiseData.policy.application.reasons", [
         "Medical history of cancer",
         "Scuba activity as disclosed on the application"
     ]);
-    
-    console.log("payment_map in overview: ", payment_map, final_face_amount);
-    
-    // Set premium and payment schedule data if available
-    if (final_yearly_premium && final_monthly_premium) {
-        // Set premium amounts
-        safe_set(body, "viewContext.agentOverviewTableData.policy.annualPremiumCents", final_yearly_premium);
-        safe_set(body, "viewContext.agentOverviewTableData.policy.grossModalPremiumCents", final_monthly_premium);
-        safe_set(body, "viewContext.agentOverviewTableData.policy.pricingDetails.annualPremiumCents", final_yearly_premium);
-        safe_set(body, "viewContext.agentOverviewTableData.policy.pricingDetails.monthlyPremiumCents", final_monthly_premium);
-    }
-    
-    // Set billing/payment schedule information if available
-    if (payment_map && payment_map.billing_mode && bank_account_info_map) {
-        safe_set(body, "viewContext.agentOverviewTableData.policy.billing", {
+
+    // ===== CRITICAL PAYMENT METHOD FIX =====
+    // The issue is that the response may already contain billing.defaultPaymentMethod with card data
+    // We need to FORCE overwrite it with our bank account data
+
+    if (bank_account_info_map && bank_account_info_map.id) {
+        console.log("FORCING bank account payment method:", bank_account_info_map);
+
+        // Build the complete payment method object
+        const paymentMethodDetails = {
+            "__typename": "PaymentMethod",
+            "id": bank_account_info_map.id,
+            "type": bank_account_info_map.method_type,
+            "details": {
+                "__typename": "BankAccountDetails",
+                "type": "bankAccount",
+                "last4": bank_account_info_map.last4,
+                "bankName": bank_account_info_map.bank_name
+            }
+        };
+
+        // Get billing mode - use payment_map if available, otherwise default
+        const billingMode = payment_map?.billing_mode || "MONTHLY";
+
+        // DIRECT ASSIGNMENT - Don't use safe_set because it won't create the path
+        if (!body.viewContext.agentOverviewTableData.policy.billing) {
+            body.viewContext.agentOverviewTableData.policy.billing = {};
+        }
+
+        // Completely overwrite the billing object
+        body.viewContext.agentOverviewTableData.policy.billing = {
             "__typename": "BillingSubscription",
-            "mode": payment_map.billing_mode,
-            "subscriptionId": "7fd1fcca-7cab-4b57-8a20-020d5ba7d660",
+            "mode": billingMode,
+            "subscriptionId": body.viewContext.agentOverviewTableData.policy.billing.subscriptionId || "7fd1fcca-7cab-4b57-8a20-020d5ba7d660",
             "items": [
                 {
                     "__typename": "SubscriptionItem",
-                    "monthlyAmount": final_monthly_premium || 0,
-                    "yearlyAmount": final_yearly_premium || 0
+                    "monthlyAmount": monthlyPremiumCents || 0,
+                    "yearlyAmount": yearlyPremiumCents || 0
                 }
             ],
-            "defaultPaymentMethod": {
-                "__typename": "PaymentMethod",
-                "id": "JSM6ZWN962XCSGV5",
-                "type": bank_account_info_map.method_type,
-                "details": {
-                    "__typename": "BankAccountDetails",
-                    "type": "bankAccount",
-                    "last4": bank_account_info_map.last4,
-                    "bankName": "UNLISTED TEST BANK"
+            "defaultPaymentMethod": paymentMethodDetails
+        };
+
+        console.log("New billing data set:", body.viewContext.agentOverviewTableData.policy.billing);
+
+        // Also set bind details for payment schedule display
+        if (payment_map?.start_date) {
+            const bindDetails = {
+                mode: billingMode,
+                startDate: payment_map.start_date
+            };
+
+            // Add SSBB details if applicable
+            if (payment_map.billing_schedule === "SOCIAL_SECURITY_PAYMENT" && payment_map.ssbb_payment_schedule) {
+                bindDetails.modeDetails = {
+                    ssbb: true
+                };
+
+                if (["SECOND_WEDNESDAY", "THIRD_WEDNESDAY", "FOURTH_WEDNESDAY"].includes(payment_map.ssbb_payment_schedule)) {
+                    bindDetails.mode = "MONTHLY_WEEKDAY";
+                    const ordinal = payment_map.ssbb_payment_schedule === "SECOND_WEDNESDAY" ? 2 :
+                        payment_map.ssbb_payment_schedule === "THIRD_WEDNESDAY" ? 3 : 4;
+                    bindDetails.modeDetails.monthlyWeekday = {
+                        ordinal: ordinal,
+                        weekday: 3
+                    };
                 }
             }
-        });
-        
-        // Set bind details for payment schedule display
-        safe_set(body, "viewContext.agentOverviewTableData.policy.bindDetails", {
-            mode: payment_map.billing_mode,
-            startDate: payment_map.start_date
-        });
+
+            if (!body.viewContext.agentOverviewTableData.policy.bindDetails) {
+                body.viewContext.agentOverviewTableData.policy.bindDetails = {};
+            }
+            body.viewContext.agentOverviewTableData.policy.bindDetails = bindDetails;
+        }
+    }
+    else if (credit_card_info_map && credit_card_info_map.id) {
+        console.log("FORCING credit card payment method:", credit_card_info_map);
+
+        const paymentMethodDetails = {
+            "__typename": "PaymentMethod",
+            "id": credit_card_info_map.id,
+            "type": credit_card_info_map.method_type || "CARD",
+            "details": {
+                "__typename": "CardDetails",
+                "type": "card",
+                "last4": credit_card_info_map.last4,
+                "brand": credit_card_info_map.brand || "visa"
+            }
+        };
+
+        const billingMode = payment_map?.billing_mode || "MONTHLY";
+
+        if (!body.viewContext.agentOverviewTableData.policy.billing) {
+            body.viewContext.agentOverviewTableData.policy.billing = {};
+        }
+
+        body.viewContext.agentOverviewTableData.policy.billing = {
+            "__typename": "BillingSubscription",
+            "mode": billingMode,
+            "subscriptionId": body.viewContext.agentOverviewTableData.policy.billing.subscriptionId || "7fd1fcca-7cab-4b57-8a20-020d5ba7d660",
+            "items": [
+                {
+                    "__typename": "SubscriptionItem",
+                    "monthlyAmount": monthlyPremiumCents || 0,
+                    "yearlyAmount": yearlyPremiumCents || 0
+                }
+            ],
+            "defaultPaymentMethod": paymentMethodDetails
+        };
+
+        console.log("New billing data set:", body.viewContext.agentOverviewTableData.policy.billing);
+    }
+    else {
+        console.warn("No payment method data available (neither bank_account_info_map nor credit_card_info_map)");
     }
 
+    // Final fallback for applicationMetaData
     if (body?.viewContext?.policy?.application?.applicationMetaData) {
         body.viewContext.policy.application.applicationMetaData.initialFaceValue =
             application_answers?.intendedCoverage;
     }
+
+    console.log("overview_post_process - Complete");
     return new Blob([JSON.stringify(body)], { type: "application/json" });
 };
 
@@ -1172,36 +1332,36 @@ function getNextNthWednesday(n) {
 }
 
 const fe_checkout_details_post_process_routes = async (response) => {
-	console.log("in the fe_checkout_details_post_process_routes")
-	const body = await response.json();
-	console.log("response: ", body);
-	safe_set(body, "viewContext.policy.beneficiaries", []);
-	safe_set(
-		body,
-		"viewContext.policy.pricingDetails.faceAmountCents",
-		application_answers?.intendedCoverage?.replace(/,/g, "") * 100
-	);
-	safe_set(
-		body,
-		"viewContext.policy.application.applicationMetaData.initialFaceValue",
-		application_answers?.intendedCoverage?.replace(/,/g, "")
-	);
-	safe_set(
-		body,
-		"viewContext.associatedQuote.face_amount",
-		application_answers?.intendedCoverage?.replace(/,/g, "")
-	);
-	if (body?.viewContext?.pricing?.rates[0]?.prices[0]?.face_amount?.cents) {
-		body.viewContext.pricing.rates[0].prices[0].face_amount.cents =
-			application_answers?.intendedCoverage?.replace(/,/g, "") * 100;
-	}
-	console.log("final_yearly_premium: ", final_yearly_premium);
-	if (body?.viewContext?.pricing?.rates[0]?.prices[0] && final_yearly_premium && final_monthly_premium && final_face_amount) {
-		body.viewContext.pricing.rates[0].prices[0].face_amount.cents = final_face_amount;
-		body.viewContext.pricing.rates[0].prices[0].premium_monthly.cents = final_monthly_premium;
-		body.viewContext.pricing.rates[0].prices[0].premium_yearly.cents = final_yearly_premium;
-	}
-	return new Blob([JSON.stringify(body)], { type: "application/json" });
+    console.log("in the fe_checkout_details_post_process_routes")
+    const body = await response.json();
+    console.log("response: ", body);
+    safe_set(body, "viewContext.policy.beneficiaries", []);
+    safe_set(
+        body,
+        "viewContext.policy.pricingDetails.faceAmountCents",
+        application_answers?.intendedCoverage?.replace(/,/g, "") * 100
+    );
+    safe_set(
+        body,
+        "viewContext.policy.application.applicationMetaData.initialFaceValue",
+        application_answers?.intendedCoverage?.replace(/,/g, "")
+    );
+    safe_set(
+        body,
+        "viewContext.associatedQuote.face_amount",
+        application_answers?.intendedCoverage?.replace(/,/g, "")
+    );
+    if (body?.viewContext?.pricing?.rates[0]?.prices[0]?.face_amount?.cents) {
+        body.viewContext.pricing.rates[0].prices[0].face_amount.cents =
+            application_answers?.intendedCoverage?.replace(/,/g, "") * 100;
+    }
+    console.log("final_yearly_premium: ", final_yearly_premium);
+    if (body?.viewContext?.pricing?.rates[0]?.prices[0] && final_yearly_premium && final_monthly_premium && final_face_amount) {
+        body.viewContext.pricing.rates[0].prices[0].face_amount.cents = final_face_amount;
+        body.viewContext.pricing.rates[0].prices[0].premium_monthly.cents = final_monthly_premium;
+        body.viewContext.pricing.rates[0].prices[0].premium_yearly.cents = final_yearly_premium;
+    }
+    return new Blob([JSON.stringify(body)], { type: "application/json" });
 };
 
 /**
@@ -1367,11 +1527,11 @@ const fe_checkout_payment_post_process = async (response) => {
 const fe_checkout_signatures_post_process = async (response) => {
     console.log("fe_checkout_signatures_post_process was called")
     let body = await response.json();
-    
+
     const firstName = application_answers.first_name.value;
     const lastName = application_answers.last_name.value;
     const middleName = application_answers.middle_name.value || "";
-    
+
     const signaure = {
         actor_entity: {
             id: { value: "b42cf505-49a8-4e47-aba1-53a0f4833146" },
@@ -1389,7 +1549,7 @@ const fe_checkout_signatures_post_process = async (response) => {
         source: "AFTON, TX",
         action_source: "REQUEST",
     };
-    
+
     console.log("checkout signatures state", checkout_signatures_state);
     if (checkout_signatures_state > 1 || application_type === "FINANCIAL_FOUNDATION_IUL_II") {
         safe_set(
@@ -1580,7 +1740,8 @@ const fe_checkout_review_post_process = async (response) => {
     let body = await response.json();
     body = populate_answers(body);
     body = populate_enriched_application(body);
-    console.log("AMAAN was able to call this");
+    console.log("fe_checkout_review_post_process called");
+
     const firstName = application_answers.first_name.value;
     const lastName = application_answers.last_name.value;
 
@@ -1602,17 +1763,34 @@ const fe_checkout_review_post_process = async (response) => {
         body.viewContext.pricing.rates[0].prices[0].premium_yearly.cents = final_yearly_premium;
     }
 
-    // Payment Schedule
-    body.viewContext.policy.bindDetails.mode = payment_map.billing_mode;
-    body.viewContext.policy.bindDetails.startDate = payment_map.start_date;
-    if (payment_map.billing_schedule === "SOCIAL_SECURITY_PAYMENT") {
-        body.viewContext.policy.bindDetails.modeDetails.ssbb = true;
-        if (["SECOND_WEDNESDAY", "THIRD_WEDNESDAY", "FOURTH_WEDNESDAY"].includes(payment_map.ssbb_payment_schedule)) {
-            body.viewContext.policy.bindDetails.mode = "MONTHLY_WEEKDAY";
-            const ordinal = payment_map.ssbb_payment_schedule === "SECOND_WEDNESDAY" ? 2 : payment_map.ssbb_payment_schedule === "THIRD_WEDNESDAY" ? 3 : 4;
-            body.viewContext.policy.bindDetails.modeDetails.monthlyWeekday.ordinal = ordinal;
-            body.viewContext.policy.bindDetails.modeDetails.monthlyWeekday.weekday = 3;
-            body.viewContext.policy.bindDetails.startDate = getNextNthWednesday(ordinal);
+    // Payment Schedule - DEFENSIVE NULL CHECKS
+    console.log("payment_map in review:", payment_map);
+
+    if (payment_map && payment_map.billing_mode) {
+        console.log("Setting payment schedule from payment_map");
+        body.viewContext.policy.bindDetails.mode = payment_map.billing_mode;
+        body.viewContext.policy.bindDetails.startDate = payment_map.start_date;
+
+        if (payment_map.billing_schedule === "SOCIAL_SECURITY_PAYMENT") {
+            body.viewContext.policy.bindDetails.modeDetails.ssbb = true;
+            if (["SECOND_WEDNESDAY", "THIRD_WEDNESDAY", "FOURTH_WEDNESDAY"].includes(payment_map.ssbb_payment_schedule)) {
+                body.viewContext.policy.bindDetails.mode = "MONTHLY_WEEKDAY";
+                const ordinal = payment_map.ssbb_payment_schedule === "SECOND_WEDNESDAY" ? 2 :
+                    payment_map.ssbb_payment_schedule === "THIRD_WEDNESDAY" ? 3 : 4;
+                body.viewContext.policy.bindDetails.modeDetails.monthlyWeekday.ordinal = ordinal;
+                body.viewContext.policy.bindDetails.modeDetails.monthlyWeekday.weekday = 3;
+                body.viewContext.policy.bindDetails.startDate = getNextNthWednesday(ordinal);
+            }
+        }
+    } else {
+        console.warn("payment_map is null or missing billing_mode, using defaults");
+        // Try to get billing mode from existing body data
+        const existingMode = body?.viewContext?.policy?.bindDetails?.mode;
+        if (existingMode) {
+            console.log("Using existing billing mode:", existingMode);
+        } else {
+            console.warn("No billing mode available, defaulting to MONTHLY");
+            safe_set(body, "viewContext.policy.bindDetails.mode", "MONTHLY");
         }
     }
 
@@ -1620,66 +1798,78 @@ const fe_checkout_review_post_process = async (response) => {
     console.log("beneficiaries: ", beneficiaries);
     safe_set(body, "viewContext.policy.beneficiaries", beneficiaries);
 
-    // Billing Information/Payment Details
-    const date = new Date(application_answers?.birth_date?.value);
+    // Billing Information/Payment Details - DEFENSIVE NULL CHECKS
+    if (bank_account_info_map && bank_account_info_map.id) {
+        console.log("Setting bank account payment method");
+        const date = new Date(application_answers?.birth_date?.value);
+        const year = date.getUTCFullYear();
+        const month = date.getUTCMonth() + 1;
+        const day = date.getUTCDate();
 
-    const year = date.getUTCFullYear();
-    const month = date.getUTCMonth() + 1;
-    const day = date.getUTCDate();
-    const payment_method_object = {
-        "id": bank_account_info_map.id,
-        "method_type": bank_account_info_map.method_type,
-        "bank_account": {
-            "bank_name": bank_account_info_map.bank_name,
-            "last4": bank_account_info_map.last4,
-            "account_type": bank_account_info_map.account_type,
-            "account_number_token": bank_account_info_map.account_number_token,
-            "routing_number": bank_account_info_map.routing_number
-        },
-        "billing_name": application_answers?.first_name?.value + " " + application_answers?.last_name?.value,
-        "billing_address": {
+        const payment_method_object = {
+            "id": bank_account_info_map.id,
+            "method_type": bank_account_info_map.method_type,
+            "bank_account": {
+                "bank_name": bank_account_info_map.bank_name,
+                "last4": bank_account_info_map.last4,
+                "account_type": bank_account_info_map.account_type,
+                "account_number_token": bank_account_info_map.account_number_token,
+                "routing_number": bank_account_info_map.routing_number
+            },
+            "billing_name": application_answers?.first_name?.value + " " + application_answers?.last_name?.value,
+            "billing_address": {
+                "street_1": application_answers?.stateless_address?.value?.street_1,
+                "street_2": application_answers?.stateless_address?.value?.street_2 || "",
+                "city": application_answers?.stateless_address?.value?.city,
+                "state": application_answers?.unchangeable_state?.value,
+                "country": "us",
+                "postal_code": application_answers?.stateless_address?.value?.postal_code,
+                "address_type": "UNKNOWN"
+            },
+            "billing_relationship": "self",
+            "billing_date_of_birth": {
+                "year": year,
+                "month": month,
+                "day": day
+            },
+            "billing_email": application_answers?.primary_email.value || "",
+            "merchant_account": "MACCT_ADYEN_PLATFORM",
+            "owner_id": {
+                "value": "776cf7fe-a2a9-46cb-b6d4-310eb55690f8"
+            },
+            "intent_id": {
+                "value": "131a11da-c1ff-41b0-9c71-67186e601f19"
+            },
+            "unusable": false
+        };
+
+        safe_set(body, "viewContext.billing.subscription.payment_methods", [payment_method_object]);
+        safe_set(body, "viewContext.billing.subscription.default_payment_method_id", bank_account_info_map.id);
+        safe_set(body, "viewContext.billing.subscription.default_payment_method", payment_method_object);
+        safe_set(body, "viewContext.billingAddress", {
             "street_1": application_answers?.stateless_address?.value?.street_1,
             "street_2": application_answers?.stateless_address?.value?.street_2 || "",
             "city": application_answers?.stateless_address?.value?.city,
             "state": application_answers?.unchangeable_state?.value,
-            "country": "us",
             "postal_code": application_answers?.stateless_address?.value?.postal_code,
-            "address_type": "UNKNOWN"
-        },
-        "billing_relationship": "self",
-        "billing_date_of_birth": {
-            "year": year,
-            "month": month,
-            "day": day
-        },
-        "billing_email": application_answers?.primary_email.value || "",
-        "merchant_account": "MACCT_ADYEN_PLATFORM",
-        "owner_id": {
-            "value": "776cf7fe-a2a9-46cb-b6d4-310eb55690f8"
-        },
-        "intent_id": {
-            "value": "131a11da-c1ff-41b0-9c71-67186e601f19"
-        },
-        "unusable": false
+        });
+    } else {
+        console.warn("bank_account_info_map is null or missing id");
     }
-    safe_set(body, "viewContext.billing.subscription.payment_methods", [payment_method_object]);
-    safe_set(body, "viewContext.billing.subscription.default_payment_method_id", bank_account_info_map.id);
-    safe_set(body, "viewContext.billing.subscription.default_payment_method", payment_method_object);
-    safe_set(body, "viewContext.billingAddress", {
-        "street_1": application_answers?.stateless_address?.value?.street_1,
-        "street_2": application_answers?.stateless_address?.value?.street_2 || "",
-        "city": application_answers?.stateless_address?.value?.city,
-        "state": application_answers?.unchangeable_state?.value,
-        "postal_code": application_answers?.stateless_address?.value?.postal_code,
-    })
 
-    // Summary
-    safe_set(body, "viewContext.policy.bindDetails.modalPremiumCents", payment_map.billing_mode === "ANNUAL" ? final_yearly_premium : final_monthly_premium);
-    safe_set(
-        body,
-        "viewContext.policy.pricingDetails.faceAmountCents",
-        final_face_amount
-    );
+    // Summary - DEFENSIVE NULL CHECKS
+    const modalPremium = payment_map?.billing_mode === "ANNUAL"
+        ? (final_yearly_premium || 0)
+        : (final_monthly_premium || 0);
+
+    console.log("Setting modal premium:", modalPremium);
+    safe_set(body, "viewContext.policy.bindDetails.modalPremiumCents", modalPremium);
+
+    if (final_face_amount) {
+        safe_set(body, "viewContext.policy.pricingDetails.faceAmountCents", final_face_amount);
+    } else {
+        console.warn("final_face_amount is not set");
+    }
 
     return new Blob([JSON.stringify(body)], { type: "application/json" });
 };
@@ -2935,7 +3125,7 @@ const requests_obj = [
         pre_process: explicit_target(
             "/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/approval?_data=routes/_main.$basePath.$"
         ),
-        // post_process: fe_approval_post_process_routes,
+         post_process: approval_post_process,
     },
     {
         method: "GET",

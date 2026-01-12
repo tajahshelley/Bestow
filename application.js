@@ -96,6 +96,7 @@ const handlePreApprovalRequest = async ({ request }) => {
 
 const get_started = async (response) => {
     let body = await response.json();
+    checkout_signatures_state = 0
     //resetting the state so it won't populate data at the beginning of the demo.
     if (get_started_state === "initial" || get_started_state === "done") {
         application_state = {
@@ -357,9 +358,9 @@ const handlePINRequest = async ({ request }) => {
     virtual_notification_preference = formData.notificationPreference;
 
     // Determine the URL based on notification preference and application type
-    const pinUrl = (application_type !== "FINANCIAL_FOUNDATION_IUL_II" && virtual_notification_preference === "TYPE_EMAIL")
-    ? "https://app.getreprise.com/launch/Q6oZNey/"
-    : "https://app.getreprise.com/launch/x6412kn/"
+    const pinUrl =  virtual_notification_preference === "TYPE_EMAIL"
+        ? "https://app.getreprise.com/launch/Q6oZNey/"
+        : "https://app.getreprise.com/launch/x6412kn/"
 
     if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
         self.clients
@@ -501,7 +502,7 @@ const handleUnderwritingRequest = async ({ request }) => {
             //  approved link/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/approval
             app_approved = true;
             if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
-                redirect = get_sales_medium() === "in_person" ? "/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/approval" :"/agent/iul/virtual/d516613c-f743-4a52-a51d-8e360386cfe7/approval" 
+                redirect =  "/agent/iul/virtual/d516613c-f743-4a52-a51d-8e360386cfe7/approval"
             } else {
                 redirect =
                     get_sales_medium() === "in_person"
@@ -766,7 +767,7 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
 
         if (formData.billing_mode || formData.monthly_premium || formData.start_date) {
             payment_map = {
-                ...payment_map, 
+                ...payment_map,
                 billing_mode: formData.billing_mode || payment_map?.billing_mode || null,
                 monthly_premium: formData.monthly_premium || payment_map?.monthly_premium || null,
                 yearly_premium: formData.yearly_premium || payment_map?.yearly_premium || null,
@@ -804,7 +805,7 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
     if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
         redirect =
             get_sales_medium() === "in_person"
-                ? "/agent/iul/72414f8f-4909-466d-b6ae-4ca92983afd5/checkout-signatures"
+                ? "/agent/969feace-a616-4fab-afc2-b48076eda9ef/checkout-signatures"
                 : "/agent/iul/virtual/299c4f89-eda3-4f3e-8e14-121dc42e54dd/checkout-signatures";
     } else {
         redirect =
@@ -1551,7 +1552,7 @@ const fe_checkout_signatures_post_process = async (response) => {
     };
 
     console.log("checkout signatures state", checkout_signatures_state);
-    if (checkout_signatures_state > 1 || application_type === "FINANCIAL_FOUNDATION_IUL_II") {
+    if (checkout_signatures_state > 1 ) {
         safe_set(
             body,
             "viewContext.applicationPartTwoDocumentsNoForceCreate.0.metadata.signatures",
@@ -1594,65 +1595,6 @@ const fe_checkout_signatures_post_process = async (response) => {
     body = populate_enriched_application(body);
     return new Blob([JSON.stringify(body)], { type: "application/json" });
 };
-
-
-const iul_checkout_signatures_post_process = async (response) => {
-    try {
-        console.log("iul_checkout_signatures_post_process was called");
-
-        let body = await response.json();
-        console.log("this is the iul body", body);
-
-        const signaure = {
-            actor_entity: {
-                id: { value: "39a7266f-5092-4689-b69a-0ebc93d02269" },
-                entity_type: "CUSTOMER",
-            },
-            signed_at: "2025-10-22T15:52:18Z",
-            viewed_at: "2025-10-22T15:52:18Z",
-            ip_address: "2601:197:500:5d10:6c79:94f0:1ddf:8495",
-            name: {
-                first: application_answers.first_name.value,
-                last: application_answers.last_name.value,
-                middle: application_answers.middle_name.value,
-                suffix: "",
-            },
-            source: "AFTON, TX",
-            action_source: "REQUEST",
-        };
-
-        console.log("iul checkout signatures state", checkout_signatures_state);
-
-        if (
-            checkout_signatures_state > 1 ||
-            application_type === "FINANCIAL_FOUNDATION_IUL_II"
-        ) {
-            safe_set(
-                body,
-                "viewContext.applicationPartTwoDocuments.0.metadata.signatures",
-                [signaure]
-            );
-        }
-
-        body = populate_answers(body);
-        body = populate_enriched_application(body);
-
-        return new Blob([JSON.stringify(body)], {
-            type: "application/json",
-        });
-    } catch (error) {
-        console.error(
-            "Error in iul_checkout_signatures_post_process:",
-            error
-        );
-
-        // Optional: return the original response body or rethrow
-        throw error;
-        // OR, if you prefer not to break the flow:
-        // return response;
-    }
-};
-
 
 const checkout_details_post_process = async (response) => {
     const body = await response.json();
@@ -3125,7 +3067,7 @@ const requests_obj = [
         pre_process: explicit_target(
             "/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/approval?_data=routes/_main.$basePath.$"
         ),
-         post_process: approval_post_process,
+        post_process: approval_post_process,
     },
     {
         method: "GET",
@@ -3176,7 +3118,6 @@ const requests_obj = [
         pre_process: explicit_target(
             "/agent/iul/72414f8f-4909-466d-b6ae-4ca92983afd5/checkout-signatures?_data=routes/_main.$basePath.$"
         ),
-        //  post_process: iul_checkout_signatures_post_process,
     },
     {
         method: "GET",

@@ -1383,9 +1383,9 @@ const fe_checkout_payment_post_process = async (response) => {
 
     // fixing error on payments page that sets scheduled payment to an earlier date
     const timestamp = getTomorrowTimestamp();
-    safe_set(body, "viewContext.policy.bindDetails.startDate", timestamp);
+    // safe_set(body, "viewContext.policy.bindDetails.startDate", timestamp);
 
-    safe_set(body, "viewContext.iulIllustration.data", qoute_data.latest_quote);
+    // safe_set(body, "viewContext.iulIllustration.data", qoute_data.latest_quote);
     safe_set(
         body,
         "viewContext.owner.first_name",
@@ -2178,6 +2178,8 @@ const requests_obj_fe_inperson = [
     },
 ];
 
+
+
 const requests_obj_fe = [
     {
         method: "GET",
@@ -2814,6 +2816,7 @@ const requests_obj = [
         pre_process: explicit_target(
             "/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/replacements?_data=root"
         ),
+        
     },
     {
         method: "GET",
@@ -2822,6 +2825,7 @@ const requests_obj = [
         pre_process: explicit_target(
             "/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/replacements?_data=routes/_main.$basePath.$"
         ),
+        post_process: populate,
     },
     {
         method: "GET",
@@ -2910,23 +2914,6 @@ const requests_obj = [
     },
     {
         method: "GET",
-        url: "/agent/iul/:id/agent-review-documents",
-        interception_condition: "root",
-        pre_process: explicit_target(
-            "/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/agent-review-documents?_data=root"
-        ),
-    },
-    {
-        method: "GET",
-        url: "/agent/iul/:id/agent-review-documents",
-        interception_condition: "routes/_main.$basePath.$",
-        pre_process: explicit_target(
-            "/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/agent-review-documents?_data=routes/_main.$basePath.$"
-        ),
-        post_process: populate,
-    },
-    {
-        method: "GET",
         url: "/agent/iul/:id/handoff-to-agent",
         interception_condition: "routes/_main.$basePath.$",
         pre_process: explicit_target(
@@ -2977,57 +2964,6 @@ const requests_obj = [
         post_process: populate,
     },
     {
-        method: "GET",
-        url: "/agent/iul/:id/agent-commission-disclosures",
-        interception_condition: "root",
-        pre_process: explicit_target(
-            "/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/agent-commission-disclosures?_data=root"
-        ),
-    },
-    {
-        method: "GET",
-        url: "/agent/iul/:id/agent-commission-disclosures",
-        interception_condition: "routes/_main.$basePath.$",
-        pre_process: explicit_target(
-            "/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/agent-commission-disclosures?_data=routes/_main.$basePath.$"
-        ),
-        post_process: populate,
-    },
-    {
-        method: "GET",
-        url: "/agent/iul/:id/agent-review-documents",
-        interception_condition: "root",
-        pre_process: explicit_target(
-            "/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/agent-review-documents?_data=root"
-        ),
-    },
-    {
-        method: "GET",
-        url: "/agent/iul/:id/agent-review-documents",
-        interception_condition: "routes/_main.$basePath.$",
-        pre_process: explicit_target(
-            "/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/agent-review-documents?_data=routes/_main.$basePath.$"
-        ),
-        post_process: populate,
-    },
-    {
-        method: "GET",
-        url: "/agent/iul/:id/agent-commission-disclosures",
-        interception_condition: "root",
-        pre_process: explicit_target(
-            "/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/agent-commission-disclosures?_data=root"
-        ),
-    },
-    {
-        method: "GET",
-        url: "/agent/iul/:id/agent-commission-disclosures",
-        interception_condition: "routes/_main.$basePath.$",
-        pre_process: explicit_target(
-            "/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/agent-commission-disclosures?_data=routes/_main.$basePath.$"
-        ),
-        post_process: populate,
-    },
-    {
         method: "POST",
         url: "/agent/iul/:id/agent-commission-disclosures",
         interception_condition: filter_interaction_id("commission-complete"),
@@ -3068,6 +3004,15 @@ const requests_obj = [
             "/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/approval?_data=routes/_main.$basePath.$"
         ),
         post_process: approval_post_process,
+    },
+    {
+        method: "GET",
+        url: "/agent/iul/:id/review-documents",
+        interception_condition: "routes/_main.$basePath.$",
+        pre_process: explicit_target(
+            "/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/review-documents?_data=routes/_main.$basePath.$"
+        ),
+        post_process: populate
     },
     {
         method: "GET",

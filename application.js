@@ -7,6 +7,10 @@ let underwriting_state = 0;
 let checkout_signatures_state = 0;
 let apl = "enabled";
 let virtual_notification_preference = "";
+let final_yearly_premium = null;
+let final_monthly_premium = null;
+let final_face_amount = null;
+let customize_coverage_completed = false;
 
 // code for pre-approval flow
 
@@ -619,6 +623,8 @@ const handleCheckoutDetailsRequest = async ({ request }) => {
     }
     if (formData.interactionId === "customize-complete") {
         apl = formData.apl;
+        customize_coverage_completed = true;
+        console.log("Coverage customization completed - pricing values will be locked");
     }
     if (formData.interactionId === "customize-coverage") {
         res.data = {
@@ -667,9 +673,14 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
 
         if (formData.interactionId === "payment-iul-schedule-confirm") {
             payment_map = null;
-            final_yearly_premium = parseInt(formData.yearly_premium || 0);
-            final_monthly_premium = parseInt(formData.monthly_premium || 0);
-            if (application_answers?.intendedCoverage) {
+            // Only set final values if not already calculated by pricing snippet
+            if (!final_yearly_premium) {
+                final_yearly_premium = parseInt(formData.yearly_premium || 0);
+            }
+            if (!final_monthly_premium) {
+                final_monthly_premium = parseInt(formData.monthly_premium || 0);
+            }
+            if (!final_face_amount && application_answers?.intendedCoverage) {
                 final_face_amount = parseInt(String(application_answers.intendedCoverage).replace(/,/g, "")) * 100;
             }
             payment_map = {
@@ -679,28 +690,38 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
                 start_date: formData.start_date || null,
             };
             console.log("payment_map: ", payment_map);
-            console.log("Captured final values:", { final_monthly_premium, final_yearly_premium, final_face_amount });
+            console.log("Captured final values (preferring calculated):", { final_monthly_premium, final_yearly_premium, final_face_amount });
         }
 
         if (formData.interactionId === "payment-schedule-complete") {
             payment_map = null;
+            
+            // If final values were calculated by pricing snippet, use those instead of form data
+            const useCalculatedMonthly = final_monthly_premium || formData.monthly_premium;
+            const useCalculatedYearly = final_yearly_premium || formData.yearly_premium;
+            
             payment_map = {
                 billing_mode: formData.billing_mode || null,
-                monthly_premium: formData.monthly_premium || null,
-                yearly_premium: formData.yearly_premium || null,
+                monthly_premium: useCalculatedMonthly || null,
+                yearly_premium: useCalculatedYearly || null,
                 billing_schedule: formData.billing_schedule || null,
                 ssbb_payment_schedule: formData.ssbb_payment_schedule || null,
                 start_date: formData.start_date || null,
                 radioInput: formData.radioInput || null
             };
-            console.log("payment_map: ", payment_map);
+            console.log("payment_map (with calculated values if available): ", payment_map);
 
-            final_monthly_premium = parseInt(formData.monthly_premium || 0);
-            final_yearly_premium = parseInt(formData.yearly_premium || 0);
-            if (application_answers?.intendedCoverage) {
+            // Only set final values if not already calculated by pricing snippet
+            if (!final_monthly_premium) {
+                final_monthly_premium = parseInt(formData.monthly_premium || 0);
+            }
+            if (!final_yearly_premium) {
+                final_yearly_premium = parseInt(formData.yearly_premium || 0);
+            }
+            if (!final_face_amount && application_answers?.intendedCoverage) {
                 final_face_amount = parseInt(String(application_answers.intendedCoverage).replace(/,/g, "")) * 100;
             }
-            console.log("Captured final values:", { final_monthly_premium, final_yearly_premium, final_face_amount });
+            console.log("Captured final values (preferring calculated):", { final_monthly_premium, final_yearly_premium, final_face_amount });
         }
 
         if (formData.interactionId === "billing-info-complete") {
@@ -1116,6 +1137,12 @@ const overview_post_process = async (response) => {
     }
 
     // Set premium amounts - prioritize final values over quote data
+    console.log("DEBUG: Calculating premium amounts");
+    console.log("  final_yearly_premium:", final_yearly_premium);
+    console.log("  payment_map?.yearly_premium:", payment_map?.yearly_premium);
+    console.log("  final_monthly_premium:", final_monthly_premium);
+    console.log("  payment_map?.monthly_premium:", payment_map?.monthly_premium);
+    
     const yearlyPremiumCents = final_yearly_premium ||
         payment_map?.yearly_premium ||
         (qoute_data?.latest_quote?.initialMonthlyPremiumCents ? qoute_data.latest_quote.initialMonthlyPremiumCents * 12 : null);
@@ -1124,15 +1151,32 @@ const overview_post_process = async (response) => {
         payment_map?.monthly_premium ||
         qoute_data?.latest_quote?.initialMonthlyPremiumCents;
 
+    console.log("  FINAL yearlyPremiumCents:", yearlyPremiumCents);
+    console.log("  FINAL monthlyPremiumCents:", monthlyPremiumCents);
+
     if (yearlyPremiumCents) {
+        console.log("Setting yearly premium:", yearlyPremiumCents);
         safe_set(body, "viewContext.policy.pricingDetails.annualPremiumCents", yearlyPremiumCents.toString());
         safe_set(body, "viewContext.agentOverviewTableData.policy.annualPremiumCents", yearlyPremiumCents);
         safe_set(body, "viewContext.agentOverviewTableData.policy.pricingDetails.annualPremiumCents", yearlyPremiumCents);
+        
+        // FORCE SET in billing items if billing exists
+        if (body.viewContext?.agentOverviewTableData?.policy?.billing?.items?.[0]) {
+            body.viewContext.agentOverviewTableData.policy.billing.items[0].yearlyAmount = yearlyPremiumCents;
+            console.log("  ✅ Set billing.items[0].yearlyAmount =", yearlyPremiumCents);
+        }
     }
 
     if (monthlyPremiumCents) {
+        console.log("Setting monthly premium:", monthlyPremiumCents);
         safe_set(body, "viewContext.agentOverviewTableData.policy.grossModalPremiumCents", monthlyPremiumCents);
         safe_set(body, "viewContext.agentOverviewTableData.policy.pricingDetails.monthlyPremiumCents", monthlyPremiumCents);
+        
+        // FORCE SET in billing items if billing exists
+        if (body.viewContext?.agentOverviewTableData?.policy?.billing?.items?.[0]) {
+            body.viewContext.agentOverviewTableData.policy.billing.items[0].monthlyAmount = monthlyPremiumCents;
+            console.log("  ✅ Set billing.items[0].monthlyAmount =", monthlyPremiumCents);
+        }
     }
 
     // Set policy promise reasons
@@ -1140,6 +1184,16 @@ const overview_post_process = async (response) => {
         "Medical history of cancer",
         "Scuba activity as disclosed on the application"
     ]);
+
+    // ===== ALWAYS UPDATE BILLING PREMIUM AMOUNTS =====
+    // Update billing items with correct premium values BEFORE payment method logic
+    if (body.viewContext?.agentOverviewTableData?.policy?.billing?.items?.[0]) {
+        console.log("📝 Updating existing billing items with calculated premiums");
+        body.viewContext.agentOverviewTableData.policy.billing.items[0].monthlyAmount = monthlyPremiumCents || 0;
+        body.viewContext.agentOverviewTableData.policy.billing.items[0].yearlyAmount = yearlyPremiumCents || 0;
+        console.log("  monthlyAmount:", monthlyPremiumCents);
+        console.log("  yearlyAmount:", yearlyPremiumCents);
+    }
 
     // ===== CRITICAL PAYMENT METHOD FIX =====
     // The issue is that the response may already contain billing.defaultPaymentMethod with card data
@@ -3289,13 +3343,17 @@ function safe_set(obj, path, value) {
     let current = obj;
 
     for (let i = 0; i < keys.length - 1; i++) {
-        if (current[keys[i]] == null) return;
-        // if (current[keys[i]] == null && i !== keys.length - 1) return;
+        if (current[keys[i]] == null) {
+            console.warn(`⚠️  safe_set failed: path "${path}" - "${keys[i]}" is null at position ${i}`);
+            return;
+        }
         current = current[keys[i]];
     }
 
     if (keys.at(-1) in current) {
         current[keys.at(-1)] = value;
+    } else {
+        console.warn(`⚠️  safe_set failed: path "${path}" - final key "${keys.at(-1)}" doesn't exist`);
     }
 }
 

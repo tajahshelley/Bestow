@@ -1020,6 +1020,8 @@ const overview_pre_process_routes = () => {
 const approval_post_process = async (response) => {
     console.log("approval post process", application_answers, qoute_data);
     const body = await response.json();
+    // Fix all offer.ends dates recursively to prevent "Start date must be before" validation error
+    fixOfferEndsDates(body);
     if (qoute_data.interactionId === "check-iul-eligibility")
         safe_set(
             body,
@@ -1045,6 +1047,9 @@ const overview_post_process = async (response) => {
     });
 
     const body = await response.json();
+
+    // Fix all offer.ends dates recursively to prevent "Start date must be before" validation error
+    fixOfferEndsDates(body);
 
     // Log existing billing data to see what we're overwriting
     console.log("Existing billing data:", body?.viewContext?.agentOverviewTableData?.policy?.billing);
@@ -1323,6 +1328,10 @@ const overview_post_process = async (response) => {
 
 const fe_approval_post_process_routes = async (response) => {
     const body = await response.json();
+
+    // Fix all offer.ends dates recursively to prevent "Start date must be before" validation error
+    fixOfferEndsDates(body);
+
     safe_set(
         body,
         "viewContext.associatedQuote.face_amount",
@@ -1390,6 +1399,12 @@ const fe_checkout_details_post_process_routes = async (response) => {
     console.log("in the fe_checkout_details_post_process_routes")
     const body = await response.json();
     console.log("response: ", body);
+
+    // Fix all offer.ends dates recursively to prevent "Start date must be before" validation error
+    fixOfferEndsDates(body);
+    // Fix any invalid start dates to prevent "scheduled start date is no longer valid" toast
+    fixInvalidStartDates(body);
+
     safe_set(body, "viewContext.policy.beneficiaries", []);
     safe_set(
         body,
@@ -1438,6 +1453,11 @@ const fe_checkout_payment_post_process = async (response) => {
     // fixing error on payments page that sets scheduled payment to an earlier date
     const timestamp = getTomorrowTimestamp();
     // safe_set(body, "viewContext.policy.bindDetails.startDate", timestamp);
+
+    // Fix all offer.ends dates recursively to prevent "Start date must be before" validation error
+    fixOfferEndsDates(body);
+    // Fix any invalid start dates to prevent "scheduled start date is no longer valid" toast
+    fixInvalidStartDates(body);
 
     // safe_set(body, "viewContext.iulIllustration.data", qoute_data.latest_quote);
     safe_set(
@@ -1583,6 +1603,9 @@ const fe_checkout_signatures_post_process = async (response) => {
     console.log("fe_checkout_signatures_post_process was called")
     let body = await response.json();
 
+    // Fix all offer.ends dates recursively to prevent "Start date must be before" validation error
+    fixOfferEndsDates(body);
+
     const firstName = application_answers.first_name.value;
     const lastName = application_answers.last_name.value;
     const middleName = application_answers.middle_name.value || "";
@@ -1652,6 +1675,10 @@ const fe_checkout_signatures_post_process = async (response) => {
 
 const checkout_details_post_process = async (response) => {
     const body = await response.json();
+    // Fix all offer.ends dates recursively to prevent "Start date must be before" validation error
+    fixOfferEndsDates(body);
+    // Fix any invalid start dates to prevent "scheduled start date is no longer valid" toast
+    fixInvalidStartDates(body);
     body.viewContext.iulIllustration.data = qoute_data.latest_quote;
     body.viewContext.policy.additionalApplicationData = additional_data;
     if (beneficiaries.length === 0) {
@@ -1664,6 +1691,10 @@ const checkout_details_post_process = async (response) => {
 
 const checkout_payment_post_process = async (response) => {
     let body = await response.json();
+    // Fix all offer.ends dates recursively to prevent "Start date must be before" validation error
+    fixOfferEndsDates(body);
+    // Fix any invalid start dates to prevent "scheduled start date is no longer valid" toast
+    fixInvalidStartDates(body);
     body = populate_answers(body);
     body.viewContext.iulIllustration.data = qoute_data.latest_quote; // populates the same numbers as the approved quote
     body.viewContext.owner.first_name = application_answers.first_name.value;
@@ -1734,6 +1765,10 @@ const fe_checkout_review_post_process = async (response) => {
     }
     passed_review = true; // used in FE pricing snippet
     let body = await response.json();
+    // Fix all offer.ends dates recursively to prevent "Start date must be before" validation error
+    fixOfferEndsDates(body);
+    // Fix any invalid start dates to prevent "scheduled start date is no longer valid" toast
+    fixInvalidStartDates(body);
     body = populate_answers(body);
     body = populate_enriched_application(body);
     console.log("fe_checkout_review_post_process called");
@@ -1935,6 +1970,10 @@ const explicit_target = (explicit_target, cb) => {
 
 const populate = async (response) => {
     let body = await response.json();
+    // Fix all offer.ends dates recursively to prevent "Start date must be before" validation error
+    fixOfferEndsDates(body);
+    // Fix any invalid start dates to prevent "scheduled start date is no longer valid" toast
+    fixInvalidStartDates(body);
     body = populate_answers(body);
     body = populate_enriched_application(body);
     return new Blob([JSON.stringify(body)], { type: "application/json" });
@@ -3357,6 +3396,62 @@ function safe_set(obj, path, value) {
     }
 }
 
+// Recursively find and fix all offer.ends dates in any object
+function fixOfferEndsDates(obj) {
+    if (obj === null || typeof obj !== 'object') {
+        return;
+    }
+    
+    // If this object has an "ends" property with year/month/day structure, fix it
+    if (obj.ends && typeof obj.ends === 'object' && 'year' in obj.ends && 'month' in obj.ends && 'day' in obj.ends) {
+        console.log("🔧 Fixing offer.ends date:", obj.ends);
+        obj.ends.year = 2027;
+        // Keep month and day the same, just update year
+    }
+    
+    // Recursively check all properties
+    for (const key in obj) {
+        if (obj.hasOwnProperty(key) && typeof obj[key] === 'object' && obj[key] !== null) {
+            fixOfferEndsDates(obj[key]);
+        }
+    }
+}
+
+// Fix any startDate that is in the past to prevent "scheduled start date is no longer valid" toast
+function fixInvalidStartDates(obj) {
+    if (obj === null || typeof obj !== 'object') {
+        return;
+    }
+    
+    const now = new Date();
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    
+    // Check for startDate property
+    if (obj.startDate && typeof obj.startDate === 'string') {
+        const startDate = new Date(obj.startDate);
+        if (startDate < now) {
+            console.log("🔧 Fixing invalid startDate:", obj.startDate, "-> tomorrow");
+            obj.startDate = tomorrow.toISOString();
+        }
+    }
+    
+    // Check for start_date property
+    if (obj.start_date && typeof obj.start_date === 'string') {
+        const startDate = new Date(obj.start_date);
+        if (startDate < now) {
+            console.log("🔧 Fixing invalid start_date:", obj.start_date, "-> tomorrow");
+            obj.start_date = tomorrow.toISOString();
+        }
+    }
+    
+    // Recursively check all properties
+    for (const key in obj) {
+        if (obj.hasOwnProperty(key) && typeof obj[key] === 'object' && obj[key] !== null) {
+            fixInvalidStartDates(obj[key]);
+        }
+    }
+}
+
 const save_answers = (formData) => {
     console.log("formdata: ", formData);
     if (!formData.answers) return;
@@ -3499,7 +3594,7 @@ const multiCardQuote = {
         maxCents: "50000000",
         ends: {
             __typename: "DateOnly",
-            year: 2025,
+            year: 2027,
             month: 11,
             day: 25,
         },
@@ -3600,9 +3695,9 @@ const multiCardQuote = {
         ],
         starts: {
             __typename: "DateOnly",
-            year: 2025,
-            month: 9,
-            day: 26,
+            year: 2026,
+            month: 1,
+            day: 1,
         },
     },
     minFaceAmountDollars: "10000",

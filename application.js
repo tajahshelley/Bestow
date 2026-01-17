@@ -101,6 +101,19 @@ const handlePreApprovalRequest = async ({ request }) => {
 const get_started = async (response) => {
     let body = await response.json();
     checkout_signatures_state = 0
+    app_approved = false
+
+    // Reset all pricing and payment state for new flow
+    final_yearly_premium = null;
+    final_monthly_premium = null;
+    final_face_amount = null;
+    customize_coverage_completed = false;
+    payment_map = null;
+    bank_account_info_map = null;
+    credit_card_info_map = null;
+    secondary_contact_map = null;
+    passed_review = false;
+
     //resetting the state so it won't populate data at the beginning of the demo.
     if (get_started_state === "initial" || get_started_state === "done") {
         application_state = {
@@ -362,7 +375,7 @@ const handlePINRequest = async ({ request }) => {
     virtual_notification_preference = formData.notificationPreference;
 
     // Determine the URL based on notification preference and application type
-    const pinUrl =  virtual_notification_preference === "TYPE_EMAIL"
+    const pinUrl = virtual_notification_preference === "TYPE_EMAIL"
         ? "https://app.getreprise.com/launch/Q6oZNey/"
         : "https://app.getreprise.com/launch/x6412kn/"
 
@@ -497,17 +510,20 @@ const handleUnderwritingRequest = async ({ request }) => {
         underwriting_state = 0;
         let redirect;
         if (shouldDecline()) {
+            console.log("here 1")
             // fail link
             redirect =
                 application_type === "FINANCIAL_FOUNDATION_IUL_II"
                     ? "/agent/iul/virtual/95e693b0-1bb5-4fa1-a605-cc78319757d2/overview"
                     : "/agent/virtual/fdc86577-f53e-4db5-a544-68cab58f17b9/overview";
         } else {
+            console.log("here 2")
             //  approved link/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/approval
             app_approved = true;
             if (application_type === "FINANCIAL_FOUNDATION_IUL_II") {
-                redirect =  "/agent/iul/virtual/d516613c-f743-4a52-a51d-8e360386cfe7/approval"
+                redirect = "/agent/iul/virtual/d516613c-f743-4a52-a51d-8e360386cfe7/approval"
             } else {
+                console.log("here 3")
                 redirect =
                     get_sales_medium() === "in_person"
                         ? "/agent/2a14742e-57cb-4b50-8fcb-793b1e3b3625/approval"
@@ -695,11 +711,11 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
 
         if (formData.interactionId === "payment-schedule-complete") {
             payment_map = null;
-            
+
             // If final values were calculated by pricing snippet, use those instead of form data
             const useCalculatedMonthly = final_monthly_premium || formData.monthly_premium;
             const useCalculatedYearly = final_yearly_premium || formData.yearly_premium;
-            
+
             payment_map = {
                 billing_mode: formData.billing_mode || null,
                 monthly_premium: useCalculatedMonthly || null,
@@ -1147,7 +1163,7 @@ const overview_post_process = async (response) => {
     console.log("  payment_map?.yearly_premium:", payment_map?.yearly_premium);
     console.log("  final_monthly_premium:", final_monthly_premium);
     console.log("  payment_map?.monthly_premium:", payment_map?.monthly_premium);
-    
+
     const yearlyPremiumCents = final_yearly_premium ||
         payment_map?.yearly_premium ||
         (qoute_data?.latest_quote?.initialMonthlyPremiumCents ? qoute_data.latest_quote.initialMonthlyPremiumCents * 12 : null);
@@ -1164,7 +1180,7 @@ const overview_post_process = async (response) => {
         safe_set(body, "viewContext.policy.pricingDetails.annualPremiumCents", yearlyPremiumCents.toString());
         safe_set(body, "viewContext.agentOverviewTableData.policy.annualPremiumCents", yearlyPremiumCents);
         safe_set(body, "viewContext.agentOverviewTableData.policy.pricingDetails.annualPremiumCents", yearlyPremiumCents);
-        
+
         // FORCE SET in billing items if billing exists
         if (body.viewContext?.agentOverviewTableData?.policy?.billing?.items?.[0]) {
             body.viewContext.agentOverviewTableData.policy.billing.items[0].yearlyAmount = yearlyPremiumCents;
@@ -1176,7 +1192,7 @@ const overview_post_process = async (response) => {
         console.log("Setting monthly premium:", monthlyPremiumCents);
         safe_set(body, "viewContext.agentOverviewTableData.policy.grossModalPremiumCents", monthlyPremiumCents);
         safe_set(body, "viewContext.agentOverviewTableData.policy.pricingDetails.monthlyPremiumCents", monthlyPremiumCents);
-        
+
         // FORCE SET in billing items if billing exists
         if (body.viewContext?.agentOverviewTableData?.policy?.billing?.items?.[0]) {
             body.viewContext.agentOverviewTableData.policy.billing.items[0].monthlyAmount = monthlyPremiumCents;
@@ -1591,9 +1607,9 @@ const fe_checkout_payment_post_process = async (response) => {
             },
             "unusable": false
         }
-        safe_set(body, "viewContext.billing.subscription.payment_methods", [payment_method_object]);
-        safe_set(body, "viewContext.billing.subscription.default_payment_method_id", bank_account_info_map.id);
-        safe_set(body, "viewContext.billing.subscription.default_payment_method", payment_method_object);
+        // safe_set(body, "viewContext.billing.subscription.payment_methods", [payment_method_object]);
+        // safe_set(body, "viewContext.billing.subscription.default_payment_method_id", bank_account_info_map.id);
+        // safe_set(body, "viewContext.billing.subscription.default_payment_method", payment_method_object);
     }
 
     return new Blob([JSON.stringify(body)], { type: "application/json" });
@@ -1629,7 +1645,7 @@ const fe_checkout_signatures_post_process = async (response) => {
     };
 
     console.log("checkout signatures state", checkout_signatures_state);
-    if (checkout_signatures_state > 1 ) {
+    if (checkout_signatures_state > 1) {
         safe_set(
             body,
             "viewContext.applicationPartTwoDocumentsNoForceCreate.0.metadata.signatures",
@@ -2909,7 +2925,7 @@ const requests_obj = [
         pre_process: explicit_target(
             "/agent/iul/be7bfcea-4fe1-4872-9e33-35405dee90b1/replacements?_data=root"
         ),
-        
+
     },
     {
         method: "GET",
@@ -3401,14 +3417,14 @@ function fixOfferEndsDates(obj) {
     if (obj === null || typeof obj !== 'object') {
         return;
     }
-    
+
     // If this object has an "ends" property with year/month/day structure, fix it
     if (obj.ends && typeof obj.ends === 'object' && 'year' in obj.ends && 'month' in obj.ends && 'day' in obj.ends) {
         console.log("🔧 Fixing offer.ends date:", obj.ends);
         obj.ends.year = 2027;
         // Keep month and day the same, just update year
     }
-    
+
     // Recursively check all properties
     for (const key in obj) {
         if (obj.hasOwnProperty(key) && typeof obj[key] === 'object' && obj[key] !== null) {
@@ -3422,10 +3438,10 @@ function fixInvalidStartDates(obj) {
     if (obj === null || typeof obj !== 'object') {
         return;
     }
-    
+
     const now = new Date();
     const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    
+
     // Check for startDate property
     if (obj.startDate && typeof obj.startDate === 'string') {
         const startDate = new Date(obj.startDate);
@@ -3434,7 +3450,7 @@ function fixInvalidStartDates(obj) {
             obj.startDate = tomorrow.toISOString();
         }
     }
-    
+
     // Check for start_date property
     if (obj.start_date && typeof obj.start_date === 'string') {
         const startDate = new Date(obj.start_date);
@@ -3443,7 +3459,7 @@ function fixInvalidStartDates(obj) {
             obj.start_date = tomorrow.toISOString();
         }
     }
-    
+
     // Recursively check all properties
     for (const key in obj) {
         if (obj.hasOwnProperty(key) && typeof obj[key] === 'object' && obj[key] !== null) {

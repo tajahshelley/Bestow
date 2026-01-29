@@ -696,8 +696,8 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
             if (!final_monthly_premium) {
                 final_monthly_premium = parseInt(formData.monthly_premium || 0);
             }
-            if (!final_face_amount && application_answers?.intendedCoverage) {
-                final_face_amount = parseInt(String(application_answers.intendedCoverage).replace(/,/g, "")) * 100;
+            if (!final_face_amount && getCoverageValue()) {
+                final_face_amount = parseInt(String(getCoverageValue()).replace(/,/g, "")) * 100;
             }
             payment_map = {
                 billing_mode: formData.billing_mode || null,
@@ -734,8 +734,8 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
             if (!final_yearly_premium) {
                 final_yearly_premium = parseInt(formData.yearly_premium || 0);
             }
-            if (!final_face_amount && application_answers?.intendedCoverage) {
-                final_face_amount = parseInt(String(application_answers.intendedCoverage).replace(/,/g, "")) * 100;
+            if (!final_face_amount && getCoverageValue()) {
+                final_face_amount = parseInt(String(getCoverageValue()).replace(/,/g, "")) * 100;
             }
             console.log("Captured final values (preferring calculated):", { final_monthly_premium, final_yearly_premium, final_face_amount });
         }
@@ -797,8 +797,8 @@ const handleCheckoutPaymentRequest = async ({ request }) => {
             console.log("Captured final_yearly_premium:", final_yearly_premium);
         }
 
-        if (!final_face_amount && application_answers?.intendedCoverage) {
-            final_face_amount = parseInt(String(application_answers.intendedCoverage).replace(/,/g, "")) * 100;
+        if (!final_face_amount && getCoverageValue()) {
+            final_face_amount = parseInt(String(getCoverageValue()).replace(/,/g, "")) * 100;
             console.log("Calculated final_face_amount:", final_face_amount);
         }
 
@@ -1047,6 +1047,42 @@ const approval_post_process = async (response) => {
             qoute_data.latest_quote
         );
     }
+
+    // CRITICAL: Initialize the slider/illustration with the user's intended coverage amount
+    const coverageValue = getCoverageValue();
+    if (coverageValue && body.viewContext?.iulIllustration?.data) {
+        const coverageCents = parseInt(String(coverageValue).replace(/,/g, "")) * 100;
+        console.log("Setting initial slider value from intendedCoverage:", coverageValue, "->", coverageCents, "cents");
+        body.viewContext.iulIllustration.data.initialDeathBenefitCents = String(coverageCents);
+
+        // Also update related premium calculations based on the coverage amount
+        // These are approximate values - the real calculation would come from the backend
+        const coverageDollars = parseInt(String(coverageValue).replace(/,/g, ""));
+        const premiumLookup = {
+            175000: { monthly: 25617, guideline: 374700, minNoLapse: 14050 },
+            200000: { monthly: 25617, guideline: 374700, minNoLapse: 14050 },
+            250000: { monthly: 32021, guideline: 460800, minNoLapse: 16687 },
+            375000: { monthly: 48032, guideline: 685200, minNoLapse: 25031 }
+        };
+
+        // Find the closest matching premium tier or use the exact match
+        let premiumData = premiumLookup[coverageDollars];
+        if (!premiumData) {
+            // Find the closest tier
+            const tiers = Object.keys(premiumLookup).map(Number).sort((a, b) => a - b);
+            const closestTier = tiers.reduce((prev, curr) =>
+                Math.abs(curr - coverageDollars) < Math.abs(prev - coverageDollars) ? curr : prev
+            );
+            premiumData = premiumLookup[closestTier];
+        }
+
+        if (premiumData) {
+            body.viewContext.iulIllustration.data.initialMonthlyPremiumCents = premiumData.monthly;
+            body.viewContext.iulIllustration.data.guidelineLevelPremiumCents = premiumData.guideline;
+            body.viewContext.iulIllustration.data.monthlyMinNoLapsePremiumCents = premiumData.minNoLapse;
+        }
+    }
+
     if (body.viewContext?.owner) {
         if (application_answers.first_name?.value) {
             body.viewContext.owner.first_name = application_answers.first_name.value;
@@ -1156,7 +1192,7 @@ const overview_post_process = async (response) => {
 
     // Calculate face amount - prioritize final_face_amount, then application answers, then quote data
     const faceAmountCents = final_face_amount ||
-        (application_answers?.intendedCoverage ? parseInt(String(application_answers.intendedCoverage).replace(/,/g, "")) * 100 : null) ||
+        (getCoverageValue() ? parseInt(String(getCoverageValue()).replace(/,/g, "")) * 100 : null) ||
         qoute_data?.latest_quote?.initialDeathBenefitCents;
 
     if (faceAmountCents) {
@@ -1345,7 +1381,7 @@ const overview_post_process = async (response) => {
     // Final fallback for applicationMetaData
     if (body?.viewContext?.policy?.application?.applicationMetaData) {
         body.viewContext.policy.application.applicationMetaData.initialFaceValue =
-            application_answers?.intendedCoverage;
+            getCoverageValue();
     }
 
     console.log("overview_post_process - Complete");
@@ -1361,7 +1397,7 @@ const fe_approval_post_process_routes = async (response) => {
     safe_set(
         body,
         "viewContext.associatedQuote.face_amount",
-        application_answers?.intendedCoverage?.replace(/,/g, "")
+        (getCoverageValue() || "").replace(/,/g, "")
     );
     safe_set(
         body,
@@ -1431,25 +1467,26 @@ const fe_checkout_details_post_process_routes = async (response) => {
     // Fix any invalid start dates to prevent "scheduled start date is no longer valid" toast
     fixInvalidStartDates(body);
 
+    const coverageValue = getCoverageValue() || "";
     safe_set(body, "viewContext.policy.beneficiaries", []);
     safe_set(
         body,
         "viewContext.policy.pricingDetails.faceAmountCents",
-        application_answers?.intendedCoverage?.replace(/,/g, "") * 100
+        coverageValue.replace(/,/g, "") * 100
     );
     safe_set(
         body,
         "viewContext.policy.application.applicationMetaData.initialFaceValue",
-        application_answers?.intendedCoverage?.replace(/,/g, "")
+        coverageValue.replace(/,/g, "")
     );
     safe_set(
         body,
         "viewContext.associatedQuote.face_amount",
-        application_answers?.intendedCoverage?.replace(/,/g, "")
+        coverageValue.replace(/,/g, "")
     );
     if (body?.viewContext?.pricing?.rates[0]?.prices[0]?.face_amount?.cents) {
         body.viewContext.pricing.rates[0].prices[0].face_amount.cents =
-            application_answers?.intendedCoverage?.replace(/,/g, "") * 100;
+            coverageValue.replace(/,/g, "") * 100;
     }
     console.log("final_yearly_premium: ", final_yearly_premium);
     if (body?.viewContext?.pricing?.rates[0]?.prices[0] && final_yearly_premium && final_monthly_premium && final_face_amount) {
@@ -1811,7 +1848,7 @@ const fe_checkout_review_post_process = async (response) => {
     // safe_set(body, "viewContext.policy.apl", apl === "enabled" ? true : false);
     if (body?.viewContext?.pricing?.rates[0]?.prices[0]?.face_amount?.cents) {
         body.viewContext.pricing.rates[0].prices[0].face_amount.cents =
-            application_answers?.intendedCoverage?.replace(/,/g, "") * 100;
+            (getCoverageValue() || "").replace(/,/g, "") * 100;
     }
 
     if (body?.viewContext?.pricing?.rates[0]?.prices[0] && final_yearly_premium && final_monthly_premium && final_face_amount) {
@@ -3490,6 +3527,15 @@ const save_answers = (formData) => {
     });
 };
 
+// Helper function to get intended coverage value consistently
+// Returns the coverage value as a string, handling both direct values and removing commas
+function getCoverageValue() {
+    const coverage = application_answers?.intendedCoverage;
+    if (!coverage) return null;
+    // Return as string for consistent handling
+    return String(coverage);
+}
+
 const excluded_questions = ["sales_medium"];
 
 const populate_answers = (payload, reset = false) => {
@@ -4104,7 +4150,6 @@ const answer_template = {
     "stateless_address.STATE": {
         value: "TX",
     },
-    intendedCoverage: 1000000,
 };
 
 ////////////////////////////////////////

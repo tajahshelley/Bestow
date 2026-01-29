@@ -1033,21 +1033,31 @@ const overview_pre_process_routes = () => {
     };
 };
 
+
 const approval_post_process = async (response) => {
     console.log("approval post process", application_answers, qoute_data);
     const body = await response.json();
     // Fix all offer.ends dates recursively to prevent "Start date must be before" validation error
     fixOfferEndsDates(body);
-    if (qoute_data.interactionId === "check-iul-eligibility")
+    console.log("approval post process", application_answers, qoute_data);
+    if (qoute_data.interactionId === "check-iul-eligibility" && qoute_data.latest_quote) {
         safe_set(
             body,
             "viewContext.iulIllustration.data",
-            qoute_data?.latest_quote
+            qoute_data.latest_quote
         );
-    body.viewContext.iulIllustration.data = qoute_data.latest_quote; // populates the same numbers as the approved quote
-    body.viewContext.owner.first_name = application_answers.first_name.value;
-    body.viewContext.owner.middle_name = application_answers.middle_name.value;
-    body.viewContext.owner.last_name = application_answers.last_name.value;
+    }
+    if (body.viewContext?.owner) {
+        if (application_answers.first_name?.value) {
+            body.viewContext.owner.first_name = application_answers.first_name.value;
+        }
+        if (application_answers.middle_name?.value !== undefined) {
+            body.viewContext.owner.middle_name = application_answers.middle_name.value;
+        }
+        if (application_answers.last_name?.value) {
+            body.viewContext.owner.last_name = application_answers.last_name.value;
+        }
+    }
     await replay_backend.storage.set("app_info", body);
     return new Blob([JSON.stringify(body)], { type: "application/json" });
 };
@@ -1607,9 +1617,9 @@ const fe_checkout_payment_post_process = async (response) => {
             },
             "unusable": false
         }
-        // safe_set(body, "viewContext.billing.subscription.payment_methods", [payment_method_object]);
-        // safe_set(body, "viewContext.billing.subscription.default_payment_method_id", bank_account_info_map.id);
-        // safe_set(body, "viewContext.billing.subscription.default_payment_method", payment_method_object);
+        safe_set(body, "viewContext.billing.subscription.payment_methods", [payment_method_object]);
+        safe_set(body, "viewContext.billing.subscription.default_payment_method_id", bank_account_info_map.id);
+        safe_set(body, "viewContext.billing.subscription.default_payment_method", payment_method_object);
     }
 
     return new Blob([JSON.stringify(body)], { type: "application/json" });
@@ -1798,7 +1808,7 @@ const fe_checkout_review_post_process = async (response) => {
     safe_set(body, "viewContext.owner.last_name", lastName);
 
     // Coverage Details
-    safe_set(body, "viewContext.policy.apl", apl === "enabled" ? true : false);
+    // safe_set(body, "viewContext.policy.apl", apl === "enabled" ? true : false);
     if (body?.viewContext?.pricing?.rates[0]?.prices[0]?.face_amount?.cents) {
         body.viewContext.pricing.rates[0].prices[0].face_amount.cents =
             application_answers?.intendedCoverage?.replace(/,/g, "") * 100;
@@ -3194,7 +3204,6 @@ const requests_obj = [
         pre_process: overview_pre_process_routes(),
         post_process: overview_post_process,
     },
-
 ];
 
 const register_routes = () => {
@@ -4111,6 +4120,8 @@ const pin_email = `
     100000 + Math.random() * 900000
 )}</div><tr><td style="padding:12px 0 0 0"><p>"Signed by electronic signature" will appear on forms as your signature.</table></table></table><table style=border-collapse:collapse;width:100%;border-spacing:0><tr><td style="padding:0 32px"class=m_-6591581507656822621mobile-less-padding><table style=border-collapse:collapse;width:100%;border-spacing:0><tr><td style=padding-top:24px><div style=border-radius:4px;background-image:linear-gradient(#fafafa,#fafafa);display:grid><a data-saferedirecturl="https://www.google.com/url?q=http://url620.uat.mylifeinsurance.transamerica.com/ls/click?upn%3Du001.ufDMafaIl939jyWzYdBOPRGZ94Q6BD0LARZJ0gBsnElJlk7YkbXvf-2F-2FDF9uTpSfrt_oR_0-2F4uCFdIadfbLNnkzoqmUVT3TucQVGASPIY-2Bno0gxBKSu5BaSgWdehzAHBnQWgbOahjqEUpWZQSlg9U2EgWusYToVyheWK3Ag6HNCFY5WHCAQ0K2iEs1aYzbXvjZrFf1ndEnKZEKuMzar-2BP0LpX2tah8ScD15jMGDnP1Fjuc-2Bb0sX8aO20D5V7NX9UwNhsyE84A373WhG0-2Bp6UbVxpSa-2Br8k823jF-2Bwt003WP32oLFkvkp0EGTX6macQz3CEmZs03Thim9rOqtLFZSY-2Bg70XyAMCpRlotrZyLQ26MnM3XuF5Dlr791F3d7yRSgbSarnIW5aUGbzrgfE9XbqXHeDMjQoIuwcralzRBPhDdMdPOcDFUlR1ecVILYPT7c3QsMq5wY93BL37IA7snPYJfYGlZT-2Fc-2ByxtpgczUXRZgVQ8b3D0C2-2FuWyHDPXwXfz6xtwo5&source=gmail&ust=1759090903754000&usg=AOvVaw1cMG7TPqjH09ae5AHs0iix"href="http://url620.uat.mylifeinsurance.transamerica.com/ls/click?upn=u001.ufDMafaIl939jyWzYdBOPRGZ94Q6BD0LARZJ0gBsnElJlk7YkbXvf-2F-2FDF9uTpSfrt_oR_0-2F4uCFdIadfbLNnkzoqmUVT3TucQVGASPIY-2Bno0gxBKSu5BaSgWdehzAHBnQWgbOahjqEUpWZQSlg9U2EgWusYToVyheWK3Ag6HNCFY5WHCAQ0K2iEs1aYzbXvjZrFf1ndEnKZEKuMzar-2BP0LpX2tah8ScD15jMGDnP1Fjuc-2Bb0sX8aO20D5V7NX9UwNhsyE84A373WhG0-2Bp6UbVxpSa-2Br8k823jF-2Bwt003WP32oLFkvkp0EGTX6macQz3CEmZs03Thim9rOqtLFZSY-2Bg70XyAMCpRlotrZyLQ26MnM3XuF5Dlr791F3d7yRSgbSarnIW5aUGbzrgfE9XbqXHeDMjQoIuwcralzRBPhDdMdPOcDFUlR1ecVILYPT7c3QsMq5wY93BL37IA7snPYJfYGlZT-2Fc-2ByxtpgczUXRZgVQ8b3D0C2-2FuWyHDPXwXfz6xtwo5"rel="noopener noreferrer"target=_blank></a></div></table><table style=border-collapse:collapse;width:100%;border-spacing:0><tr><td style="padding-top:16px;font-family:'Whitney Book',sans-serif;padding:0;font-style:normal;font-weight:300;font-size:12px;line-height:140%;text-align:center;color:#6e6b68;text-align:left"class=m_-6591581507656822621mobile-less-padding><p style=font-weight:400;font-size:14px;line-height:21px>© 2025 Transamerica Life Insurance Company. All Rights Reserved.</table><tr><td style="padding:24px;font-family:'Whitney Book',sans-serif"></table></table></table></div><div class=yj6qo></div><div class=adL></div></div></div><div class=WhmR8e data-hash=0></div></div>
 `;
+
+
 
 
 ////////////////////////////////////////

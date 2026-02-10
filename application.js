@@ -1742,7 +1742,24 @@ const checkout_details_post_process = async (response) => {
     fixOfferEndsDates(body);
     // Fix any invalid start dates to prevent "scheduled start date is no longer valid" toast
     fixInvalidStartDates(body);
-    body.viewContext.iulIllustration.data = qoute_data.latest_quote;
+    
+    // Only overwrite if we have quote data, otherwise update existing data with captured values
+    if (qoute_data.latest_quote) {
+        body.viewContext.iulIllustration.data = qoute_data.latest_quote;
+    } else if (body.viewContext?.iulIllustration?.data) {
+        const coverageValue = getCoverageValue();
+        if (coverageValue) {
+            const coverageCents = parseInt(String(coverageValue).replace(/,/g, "")) * 100;
+            body.viewContext.iulIllustration.data.initialDeathBenefitCents = String(coverageCents);
+        }
+        if (final_monthly_premium) {
+            body.viewContext.iulIllustration.data.initialMonthlyPremiumCents = final_monthly_premium;
+        }
+        if (final_yearly_premium) {
+            body.viewContext.iulIllustration.data.guidelineLevelPremiumCents = final_yearly_premium;
+        }
+    }
+    
     body.viewContext.policy.additionalApplicationData = additional_data;
     if (beneficiaries.length === 0) {
         body.viewContext.policy.beneficiaries = [];
@@ -1759,7 +1776,24 @@ const checkout_payment_post_process = async (response) => {
     // Fix any invalid start dates to prevent "scheduled start date is no longer valid" toast
     fixInvalidStartDates(body);
     body = populate_answers(body);
-    body.viewContext.iulIllustration.data = qoute_data.latest_quote; // populates the same numbers as the approved quote
+    
+    // Only overwrite if we have quote data, otherwise update existing data with captured values
+    if (qoute_data.latest_quote) {
+        body.viewContext.iulIllustration.data = qoute_data.latest_quote;
+    } else if (body.viewContext?.iulIllustration?.data) {
+        const coverageValue = getCoverageValue();
+        if (coverageValue) {
+            const coverageCents = parseInt(String(coverageValue).replace(/,/g, "")) * 100;
+            body.viewContext.iulIllustration.data.initialDeathBenefitCents = String(coverageCents);
+        }
+        if (final_monthly_premium) {
+            body.viewContext.iulIllustration.data.initialMonthlyPremiumCents = final_monthly_premium;
+        }
+        if (final_yearly_premium) {
+            body.viewContext.iulIllustration.data.guidelineLevelPremiumCents = final_yearly_premium;
+        }
+    }
+    
     body.viewContext.owner.first_name = application_answers.first_name.value;
     body.viewContext.owner.last_name = application_answers.last_name.value;
     body.viewContext.billingAddress = {

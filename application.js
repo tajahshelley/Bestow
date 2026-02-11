@@ -1742,7 +1742,7 @@ const checkout_details_post_process = async (response) => {
     fixOfferEndsDates(body);
     // Fix any invalid start dates to prevent "scheduled start date is no longer valid" toast
     fixInvalidStartDates(body);
-    
+
     // Only overwrite if we have quote data, otherwise update existing data with captured values
     if (qoute_data.latest_quote) {
         body.viewContext.iulIllustration.data = qoute_data.latest_quote;
@@ -1759,7 +1759,7 @@ const checkout_details_post_process = async (response) => {
             body.viewContext.iulIllustration.data.guidelineLevelPremiumCents = final_yearly_premium;
         }
     }
-    
+
     body.viewContext.policy.additionalApplicationData = additional_data;
     if (beneficiaries.length === 0) {
         body.viewContext.policy.beneficiaries = [];
@@ -1776,7 +1776,7 @@ const checkout_payment_post_process = async (response) => {
     // Fix any invalid start dates to prevent "scheduled start date is no longer valid" toast
     fixInvalidStartDates(body);
     body = populate_answers(body);
-    
+
     // Only overwrite if we have quote data, otherwise update existing data with captured values
     if (qoute_data.latest_quote) {
         body.viewContext.iulIllustration.data = qoute_data.latest_quote;
@@ -1793,15 +1793,42 @@ const checkout_payment_post_process = async (response) => {
             body.viewContext.iulIllustration.data.guidelineLevelPremiumCents = final_yearly_premium;
         }
     }
-    
+
     body.viewContext.owner.first_name = application_answers.first_name.value;
     body.viewContext.owner.last_name = application_answers.last_name.value;
     body.viewContext.billingAddress = {
-        street_1: application_answers.stateless_address.value.street_1,
-        city: application_answers.stateless_address.value.city,
-        state: application_answers.unchangeable_state.value,
-        postal_code: application_answers.stateless_address.value.postal_code,
+        street_1: application_answers?.stateless_address?.value?.street_1,
+        city: application_answers?.stateless_address?.value?.city,
+        state: application_answers?.unchangeable_state?.value,
+        postal_code: application_answers?.stateless_address?.value?.postal_code,
     };
+    body.viewContext.owner.address = {
+        street_1: application_answers?.stateless_address?.value?.street_1,
+        street_2: application_answers?.stateless_address?.value?.street_2 || "",
+        city: application_answers?.stateless_address?.value?.city,
+        state: application_answers?.unchangeable_state?.value,
+        postal_code: application_answers?.stateless_address?.value?.postal_code,
+    };
+    const addresses = [];
+    addresses.push({
+        street_1: application_answers?.stateless_address?.value?.street_1,
+        street_2: application_answers?.stateless_address?.value?.street_2 || "",
+        city: application_answers?.stateless_address?.value?.city,
+        state: application_answers?.unchangeable_state?.value,
+        postal_code: application_answers?.stateless_address?.value?.postal_code,
+        address_type: "PHYSICAL"
+    });
+    if (application_answers?.mailing_address) {
+        addresses.push({
+            street_1: application_answers.mailing_address.value?.street_1 || "",
+            street_2: application_answers.mailing_address.value?.street_2 || "",
+            city: application_answers.mailing_address.value?.city || "",
+            state: application_answers.mailing_address.value?.state || "",
+            postal_code: application_answers.mailing_address.value?.postal_code || "",
+            address_type: "MAILING"
+        });
+    }
+    body.viewContext.owner.addresses = addresses;
     const salesMedium = get_sales_medium();
     if (salesMedium === "in_person") {
         if (bank_account_info_map) {
@@ -4242,7 +4269,7 @@ replay_backend.get("/agent/dashboard")
 
         console.log('>>> Dashboard date replaced with:', newTimestamp);
         return new Blob([modifiedHtml], { type: "text/html" });
-});
+    });
 ////////////////////////////////////////
 // PDF
 ////////////////////////////////////////

@@ -705,6 +705,101 @@ document.addEventListener("DOMContentLoaded", () => {
     waitForViewCardsAndInit();
 
     /* =========================================================
+       FE-SPECIFIC FLOW (non-IUL)
+       ========================================================= */
+    const FE_PAYMENT_SCHEDULE_HEADER = 'Set payment schedule';
+
+    function initializeFEFlow() {
+        if (is_IUL_flow) return;
+        if (!hasTriggerText()) return;
+
+        console.log('Initializing FE-specific flow');
+
+        // Find sections using both methods
+        const billingSection = findSectionByHeader('Collect billing information') || findViewCardByHeader('Collect billing information');
+        const paymentDetailsSection = findSectionByHeader('Collect payment details') || findViewCardByHeader('Collect payment details');
+
+        // Initial collapse
+        if (billingSection) {
+            hideCheckmark(billingSection);
+            hideViewCardCheckmark(billingSection);
+            collapseSection(billingSection);
+            collapseViewCard(billingSection);
+        }
+        if (paymentDetailsSection) {
+            hideCheckmark(paymentDetailsSection);
+            hideViewCardCheckmark(paymentDetailsSection);
+            collapseSection(paymentDetailsSection);
+            collapseViewCard(paymentDetailsSection);
+        }
+
+        // Longer-running observer for FE flow
+        const feObserver = new MutationObserver(() => {
+            const b = findSectionByHeader('Collect billing information') || findViewCardByHeader('Collect billing information');
+            const p = findSectionByHeader('Collect payment details') || findViewCardByHeader('Collect payment details');
+            
+            // Only collapse if not in edit mode (form present)
+            if (b && !b.querySelector('form')) {
+                collapseSection(b);
+                collapseViewCard(b);
+                hideCheckmark(b);
+                hideViewCardCheckmark(b);
+            }
+            if (p && !p.querySelector('form')) {
+                collapseSection(p);
+                collapseViewCard(p);
+                hideCheckmark(p);
+                hideViewCardCheckmark(p);
+            }
+        });
+
+        feObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+
+        // Keep observer running longer for FE flow (3 seconds)
+        setTimeout(() => {
+            feObserver.disconnect();
+            console.log('FE observer disconnected');
+        }, 3000);
+    }
+
+    function waitForFEFlowAndInit() {
+        // Only run for non-IUL flows
+        if (is_IUL_flow) return;
+
+        const feInitObserver = new MutationObserver(() => {
+            if (hasTriggerText()) {
+                const hasSection = findSectionByHeader(FE_PAYMENT_SCHEDULE_HEADER) || findViewCardByHeader(FE_PAYMENT_SCHEDULE_HEADER);
+                if (hasSection) {
+                    feInitObserver.disconnect();
+                    initializeFEFlow();
+                }
+            }
+        });
+
+        feInitObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+
+        // Also check immediately
+        if (hasTriggerText()) {
+            const hasSection = findSectionByHeader(FE_PAYMENT_SCHEDULE_HEADER) || findViewCardByHeader(FE_PAYMENT_SCHEDULE_HEADER);
+            if (hasSection) {
+                feInitObserver.disconnect();
+                initializeFEFlow();
+            }
+        }
+    }
+
+    // Delay FE init slightly to allow IUL detection message to arrive
+    setTimeout(() => {
+        waitForFEFlowAndInit();
+    }, 500);
+
+    /* =========================================================
        NAME REPLACEMENT UTILITY
        ========================================================= */
     function replaceNameInTextNode(textNode) {
